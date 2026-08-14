@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    platform: linux/amd64 # Убирает предупреждение про процессоры Apple
+    environment:
+      POSTGRES_USER: batys_user
+      POSTGRES_PASSWORD: batys_password
+      POSTGRES_DB: batys_monitor
+    ports:
+      - "5440:5432" # <-- Мы поменяли 5432 на 5440, чтобы не было конфликтов
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

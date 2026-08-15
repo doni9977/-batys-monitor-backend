@@ -18,6 +18,18 @@ func loadRisksByIndicator(c *fiber.Ctx, indicator string) ([]models.DetectedRisk
 			return nil, fiber.NewError(fiber.StatusBadRequest, "Параметр job_id должен быть положительным числом")
 		}
 		query = query.Where("job_id = ?", parsedJobID)
+	} else {
+		var latestDoneJob models.RiskJob
+		err := database.DB.
+			Where("status = ?", models.RiskJobStatusDone).
+			Order("created_at DESC").
+			First(&latestDoneJob).Error
+		if err != nil {
+			// Если успешных задач ещё не было, возвращаем пустой результат.
+			return []models.DetectedRisk{}, nil
+		}
+
+		query = query.Where("job_id = ?", latestDoneJob.ID)
 	}
 
 	var risks []models.DetectedRisk

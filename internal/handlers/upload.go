@@ -50,12 +50,27 @@ func UploadExcel(c *fiber.Ctx) error {
 
 	log.Printf("Успешно сохранено %d записей в базу данных!", result.RowsAffected)
 
+	job, err := services.EnqueueRiskCalculationJob(file.Filename, result.RowsAffected)
+	if err != nil {
+		log.Printf("Не удалось создать job трекинга для расчёта рисков: %v", err)
+	}
+
 	go func() {
-		services.RunAllRiskEngines()
+		jobID := uint(0)
+		if job != nil {
+			jobID = job.ID
+		}
+		services.RunAllRiskEngines(jobID)
 	}()
 
+	var riskJobID interface{}
+	if job != nil {
+		riskJobID = job.ID
+	}
+
 	return c.JSON(fiber.Map{
-		"status":  "success",
-		"message": fmt.Sprintf("Файл '%s' обработан! Загружено %d записей в базу данных.", file.Filename, result.RowsAffected),
+		"status":      "success",
+		"message":     fmt.Sprintf("Файл '%s' обработан! Загружено %d записей в базу данных.", file.Filename, result.RowsAffected),
+		"risk_job_id": riskJobID,
 	})
 }

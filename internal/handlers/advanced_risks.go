@@ -1,20 +1,14 @@
 package handlers
 
 import (
-	"github.com/danialmarat/batys-monitor-backend/internal/database"
-	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/gofiber/fiber/v2"
 )
 
 // GetRiskA7 reads already calculated records from detected_risks.
 func GetRiskA7(c *fiber.Ctx) error {
-	var risks []models.DetectedRisk
-
-	if err := database.DB.
-		Where("indicator = ?", "A7").
-		Order("risk_date DESC").
-		Find(&risks).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Ошибка чтения рисков A7"})
+	risks, err := loadRisksByIndicator(c, "A7")
+	if err != nil {
+		return respondRiskLoadError(c, err, "Ошибка чтения рисков A7")
 	}
 
 	payload := make([]map[string]interface{}, 0, len(risks))
@@ -32,13 +26,9 @@ func GetRiskA7(c *fiber.Ctx) error {
 
 // GetRiskA8 reads already calculated records from detected_risks.
 func GetRiskA8(c *fiber.Ctx) error {
-	var risks []models.DetectedRisk
-
-	if err := database.DB.
-		Where("indicator = ?", "A8").
-		Order("risk_date DESC").
-		Find(&risks).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Ошибка чтения рисков A8"})
+	risks, err := loadRisksByIndicator(c, "A8")
+	if err != nil {
+		return respondRiskLoadError(c, err, "Ошибка чтения рисков A8")
 	}
 
 	payload := make([]map[string]interface{}, 0, len(risks))
@@ -56,13 +46,9 @@ func GetRiskA8(c *fiber.Ctx) error {
 
 // GetRiskA10 reads already calculated records from detected_risks.
 func GetRiskA10(c *fiber.Ctx) error {
-	var risks []models.DetectedRisk
-
-	if err := database.DB.
-		Where("indicator = ?", "A10").
-		Order("risk_date DESC").
-		Find(&risks).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Ошибка чтения рисков A10"})
+	risks, err := loadRisksByIndicator(c, "A10")
+	if err != nil {
+		return respondRiskLoadError(c, err, "Ошибка чтения рисков A10")
 	}
 
 	payload := make([]map[string]interface{}, 0, len(risks))

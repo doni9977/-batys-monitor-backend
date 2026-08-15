@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -10,41 +11,127 @@ import (
 	"gorm.io/datatypes"
 )
 
-func RunAllRiskEngines() {
+func EnqueueRiskCalculationJob(sourceFile string, loadedRecords int64) (*models.RiskJob, error) {
+	job := &models.RiskJob{
+		Status:        models.RiskJobStatusQueued,
+		SourceFile:    sourceFile,
+		LoadedRecords: loadedRecords,
+	}
+
+	if err := database.DB.Create(job).Error; err != nil {
+		return nil, err
+	}
+
+	return job, nil
+}
+
+func RunAllRiskEngines(jobID uint) {
 	if database.DB == nil {
 		log.Println("DB is nil, skipping risk engine")
 		return
 	}
 
-	if err := database.DB.Exec("TRUNCATE TABLE detected_risks RESTART IDENTITY").Error; err != nil {
-		log.Printf("Ошибка очистки detected_risks: %v", err)
-		return
+	if err := markJobRunning(jobID); err != nil {
+		log.Printf("Не удалось перевести job=%d в running: %v", jobID, err)
 	}
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err := fmt.Errorf("panic: %v", recovered)
+			log.Printf("Паника в risk engine job=%d: %v", jobID, recovered)
+			if updateErr := markJobFailed(jobID, err); updateErr != nil {
+				log.Printf("Не удалось перевести job=%d в failed после panic: %v", jobID, updateErr)
+			}
+		}
+	}()
 
 	risks := make([]models.DetectedRisk, 0, 5000)
 
-	risks = append(risks, collectA1()...)
-	risks = append(risks, collectA2()...)
-	risks = append(risks, collectA3()...)
-	risks = append(risks, collectA4()...)
-	risks = append(risks, collectA7()...)
-	risks = append(risks, collectA8()...)
-	risks = append(risks, collectA10()...)
+	risks = append(risks, collectA1(jobID)...)
+	risks = append(risks, collectA2(jobID)...)
+	risks = append(risks, collectA3(jobID)...)
+	risks = append(risks, collectA4(jobID)...)
+	risks = append(risks, collectA7(jobID)...)
+	risks = append(risks, collectA8(jobID)...)
+	risks = append(risks, collectA10(jobID)...)
 
 	if len(risks) == 0 {
 		log.Println("Нарушения не найдены")
+		if err := markJobDone(jobID, 0); err != nil {
+			log.Printf("Не удалось перевести job=%d в done: %v", jobID, err)
+		}
 		return
 	}
 
 	if err := database.DB.CreateInBatches(risks, 500).Error; err != nil {
 		log.Printf("Ошибка сохранения обнаруженных рисков: %v", err)
+		if updateErr := markJobFailed(jobID, err); updateErr != nil {
+			log.Printf("Не удалось перевести job=%d в failed: %v", jobID, updateErr)
+		}
 		return
+	}
+
+	if err := markJobDone(jobID, len(risks)); err != nil {
+		log.Printf("Не удалось перевести job=%d в done: %v", jobID, err)
 	}
 
 	log.Printf("Успешно сохранено %d рисков в detected_risks", len(risks))
 }
 
+func markJobRunning(jobID uint) error {
+	if jobID == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	return database.DB.Model(&models.RiskJob{}).
+		Where("id = ?", jobID).
+		Updates(map[string]interface{}{
+			"status":        models.RiskJobStatusRunning,
+			"started_at":    now,
+			"finished_at":   nil,
+			"error_message": "",
+		}).Error
+}
+
+func markJobDone(jobID uint, risksFound int) error {
+	if jobID == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	return database.DB.Model(&models.RiskJob{}).
+		Where("id = ?", jobID).
+		Updates(map[string]interface{}{
+			"status":        models.RiskJobStatusDone,
+			"finished_at":   now,
+			"risks_found":   risksFound,
+			"error_message": "",
+		}).Error
+}
+
+func markJobFailed(jobID uint, cause error) error {
+	if jobID == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	errMessage := ""
+	if cause != nil {
+		errMessage = cause.Error()
+	}
+
+	return database.DB.Model(&models.RiskJob{}).
+		Where("id = ?", jobID).
+		Updates(map[string]interface{}{
+			"status":        models.RiskJobStatusFailed,
+			"finished_at":   now,
+			"error_message": errMessage,
+		}).Error
+}
+
 func makeDetectedRisk(
+	jobID uint,
 	indicator string,
 	clinicName string,
 	doctorName string,
@@ -56,6 +143,7 @@ func makeDetectedRisk(
 	body, _ := json.Marshal(details)
 
 	return models.DetectedRisk{
+		JobID:      jobID,
 		Indicator:  indicator,
 		ClinicName: clinicName,
 		DoctorName: doctorName,
@@ -66,7 +154,7 @@ func makeDetectedRisk(
 	}
 }
 
-func collectA1() []models.DetectedRisk {
+func collectA1(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -147,6 +235,7 @@ func collectA1() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A1",
 			r.ClinicName,
 			r.DoctorName,
@@ -160,7 +249,7 @@ func collectA1() []models.DetectedRisk {
 	return results
 }
 
-func collectA2() []models.DetectedRisk {
+func collectA2(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -214,6 +303,7 @@ func collectA2() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A2",
 			r.ClinicName,
 			r.DoctorName,
@@ -227,7 +317,7 @@ func collectA2() []models.DetectedRisk {
 	return results
 }
 
-func collectA3() []models.DetectedRisk {
+func collectA3(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -261,6 +351,7 @@ func collectA3() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A3",
 			"",
 			r.DoctorName,
@@ -274,7 +365,7 @@ func collectA3() []models.DetectedRisk {
 	return results
 }
 
-func collectA4() []models.DetectedRisk {
+func collectA4(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -325,6 +416,7 @@ func collectA4() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A4",
 			"",
 			"",
@@ -338,7 +430,7 @@ func collectA4() []models.DetectedRisk {
 	return results
 }
 
-func collectA7() []models.DetectedRisk {
+func collectA7(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -388,6 +480,7 @@ func collectA7() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A7",
 			"",
 			"",
@@ -401,7 +494,7 @@ func collectA7() []models.DetectedRisk {
 	return results
 }
 
-func collectA8() []models.DetectedRisk {
+func collectA8(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -457,6 +550,7 @@ func collectA8() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A8",
 			r.ClinicName,
 			r.DoctorName,
@@ -470,7 +564,7 @@ func collectA8() []models.DetectedRisk {
 	return results
 }
 
-func collectA10() []models.DetectedRisk {
+func collectA10(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
@@ -542,6 +636,7 @@ func collectA10() []models.DetectedRisk {
 		}
 
 		results = append(results, makeDetectedRisk(
+			jobID,
 			"A10",
 			"",
 			r.DoctorName,

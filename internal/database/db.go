@@ -29,7 +29,12 @@ func ConnectDb() {
 
 	// Авто-миграция: GORM сам создаст таблицы ServiceRecord и ServiceClassifier, если их нет
 	log.Println("Запуск автоматической миграции таблиц...")
-	err = db.AutoMigrate(&models.ServiceRecord{}, &models.ServiceClassifier{}, &models.DetectedRisk{})
+	err = db.AutoMigrate(
+		&models.ServiceRecord{},
+		&models.ServiceClassifier{},
+		&models.DetectedRisk{},
+		&models.RiskJob{},
+	)
 	if err != nil {
 		log.Fatal("Ошибка миграции: \n", err)
 	}

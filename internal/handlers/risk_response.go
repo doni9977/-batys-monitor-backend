@@ -14,6 +14,7 @@ func riskToJSON(r models.DetectedRisk) map[string]interface{} {
 
 	return map[string]interface{}{
 		"id":          r.ID,
+		"job_id":      r.JobID,
 		"indicator":   r.Indicator,
 		"clinic_name": r.ClinicName,
 		"doctor_name": r.DoctorName,

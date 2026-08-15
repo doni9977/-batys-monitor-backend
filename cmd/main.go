@@ -31,6 +31,8 @@ func main() {
 	app.Get("/api/risks/a10", handlers.GetRiskA10)
 	app.Get("/api/risks/duplicates", handlers.GetRiskDuplicates)
 	app.Post("/api/upload-classifier", handlers.UploadClassifierExcel)
+	app.Get("/api/risk-jobs/latest", handlers.GetLatestRiskJob)
+	app.Get("/api/risk-jobs/:id", handlers.GetRiskJobByID)
 
 	log.Println("Запуск сервера на порту 3000...")
 	log.Fatal(app.Listen(":3000"))

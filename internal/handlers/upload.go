@@ -11,6 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// UploadExcel принимает Excel-файл с реестром услуг, очищает старые данные,
+// загружает новые записи в БД и запускает Risk Engine в фоне.
 func UploadExcel(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -19,7 +21,7 @@ func UploadExcel(c *fiber.Ctx) error {
 		})
 	}
 
-	log.Printf("Получен файл: %s, Размер: %d байт", file.Filename, file.Size)
+	log.Printf("📥 Получен файл: %s, Размер: %.2f МБ", file.Filename, float64(file.Size)/1024/1024)
 
 	os.MkdirAll("./tmp", os.ModePerm)
 	tempPath := fmt.Sprintf("./tmp/%s", file.Filename)
@@ -38,7 +40,17 @@ func UploadExcel(c *fiber.Ctx) error {
 		})
 	}
 
-	log.Println("Начинаем загрузку данных в PostgreSQL...")
+	log.Printf("✅ Распарсено %d записей. Очищаем старые данные...", len(records))
+
+	// Задача 3 (БАГ #1): TRUNCATE перед загрузкой новых данных.
+	// Без этого при повторной загрузке данные дублируются и все счётчики рисков
+	// растут вдвое, втрое и т.д.
+	if err := database.DB.Exec("TRUNCATE TABLE service_records RESTART IDENTITY;").Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Не удалось очистить старые данные перед загрузкой: " + err.Error(),
+		})
+	}
+	log.Println("🗑️  Старые данные удалены. Начинаем загрузку в PostgreSQL...")
 
 	result := database.DB.CreateInBatches(&records, 1000)
 	if result.Error != nil {
@@ -48,11 +60,11 @@ func UploadExcel(c *fiber.Ctx) error {
 		})
 	}
 
-	log.Printf("Успешно сохранено %d записей в базу данных!", result.RowsAffected)
+	log.Printf("✅ Сохранено %d записей в БД. Запускаем Risk Engine...", result.RowsAffected)
 
 	job, err := services.EnqueueRiskCalculationJob(file.Filename, result.RowsAffected)
 	if err != nil {
-		log.Printf("Не удалось создать job трекинга для расчёта рисков: %v", err)
+		log.Printf("Не удалось создать job трекинга: %v", err)
 	}
 
 	go func() {
@@ -69,8 +81,9 @@ func UploadExcel(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"status":      "success",
-		"message":     fmt.Sprintf("Файл '%s' обработан! Загружено %d записей в базу данных.", file.Filename, result.RowsAffected),
-		"risk_job_id": riskJobID,
+		"status":        "success",
+		"message":       fmt.Sprintf("Файл '%s' обработан! Загружено %d записей.", file.Filename, result.RowsAffected),
+		"loaded_records": result.RowsAffected,
+		"risk_job_id":   riskJobID,
 	})
 }

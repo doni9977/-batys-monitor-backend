@@ -1,14 +1,21 @@
 services:
   postgres:
     image: postgis/postgis:15-3.3
-    platform: linux/amd64 # Убирает предупреждение про процессоры Apple
+    platform: linux/amd64
+    restart: unless-stopped
     environment:
       POSTGRES_USER: batys_user
       POSTGRES_PASSWORD: batys_password
       POSTGRES_DB: batys_monitor
     ports:
-      - "5440:5432" # <-- Мы поменяли 5432 на 5440, чтобы не было конфликтов
+      - "5440:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U batys_user -d batys_monitor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:

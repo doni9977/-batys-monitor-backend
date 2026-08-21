@@ -21,11 +21,24 @@ func loadRisksByIndicator(c *fiber.Ctx, indicator string) ([]models.DetectedRisk
 			return nil, 0, fiber.NewError(fiber.StatusBadRequest, "Параметр job_id должен быть положительным числом")
 		}
 		query = query.Where("job_id = ?", parsedJobID)
+
+		
+
+		
 	} else {
-		// Берём последний успешно завершённый job
+		// Определяем домен по префиксу индикатора:
+		//   S* → стационар, NR* → нерезиденты, остальное → osms.
+		domain := "osms"
+		if len(indicator) > 0 && (indicator[0] == 'S' || indicator[0] == 's') {
+			domain = "inpatient"
+		} else if len(indicator) >= 2 && (indicator[0] == 'N' || indicator[0] == 'n') {
+			domain = "nr"
+		}
+
+		// Берём последний успешно завершённый job ИМЕННО этого домена.
 		var latestDoneJob models.RiskJob
 		err := database.DB.
-			Where("status = ?", models.RiskJobStatusDone).
+			Where("status = ? AND domain = ?", models.RiskJobStatusDone, domain).
 			Order("created_at DESC").
 			First(&latestDoneJob).Error
 		if err != nil {
@@ -33,6 +46,9 @@ func loadRisksByIndicator(c *fiber.Ctx, indicator string) ([]models.DetectedRisk
 		}
 		query = query.Where("job_id = ?", latestDoneJob.ID)
 	}
+	
+
+
 
 	// Дополнительные фильтры
 	if doctor := c.Query("doctor"); doctor != "" {

@@ -83,6 +83,13 @@ func main() {
 	app.Get("/api/risks/a8", handlers.GetRiskA8)
 	app.Get("/api/risks/a10", handlers.GetRiskA10)
 
+	// Риски стационара
+	app.Get("/api/risks/s1", handlers.GetRiskS1)
+	app.Get("/api/risks/s2", handlers.GetRiskS2)
+	app.Get("/api/risks/s3", handlers.GetRiskS3)
+	app.Get("/api/risks/s4", handlers.GetRiskS4)
+	app.Get("/api/risks/s5", handlers.GetRiskS5)
+
 	// Deprecated — оставляем для совместимости с фронтендом
 	app.Get("/api/risks/duplicates", handlers.GetRiskDuplicates)
 

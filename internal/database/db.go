@@ -54,6 +54,7 @@ func ConnectDb() {
 		&models.RiskJob{},
 		&models.NrRecord{},
 		&models.BerkutRecord{},
+		&models.BankResponse{},
 	)
 	if err != nil {
 		log.Fatal("Ошибка миграции: \n", err)

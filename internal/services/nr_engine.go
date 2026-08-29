@@ -12,7 +12,7 @@ import (
 
 // RunAllNrRiskEngines запускает все NR-алгоритмы для указанного job.
 func RunAllNrRiskEngines(jobID uint) {
-	log.Printf("[NR Engine] Запуск алгоритмов NR1-NR4 для job_id=%d", jobID)
+	log.Printf("[NR Engine] Запуск алгоритмов NR1-NR5 для job_id=%d", jobID)
 
 	// Очищаем старые NR-риски для этого job
 	database.DB.Where("job_id = ? AND indicator LIKE 'NR%'", jobID).
@@ -23,6 +23,7 @@ func RunAllNrRiskEngines(jobID uint) {
 	allRisks = append(allRisks, collectNR2(jobID)...)
 	allRisks = append(allRisks, collectNR3(jobID)...)
 	allRisks = append(allRisks, collectNR4(jobID)...)
+	allRisks = append(allRisks, collectNR5(jobID)...)
 
 	if len(allRisks) > 0 {
 		res := database.DB.CreateInBatches(&allRisks, 500)
@@ -276,5 +277,115 @@ func collectNR4(jobID uint) []models.DetectedRisk {
 	}
 
 	log.Printf("[NR4] Найдено рисков: %d", len(results))
+	return results
+}
+
+// ─── NR5: Финансовая неактивность (Ответы БВУ) ──────────────────────────────
+// Компания не имеет банковского счета (статус "Отсутствует") — невозможно вести
+// хозяйственную деятельность. Или счёт "Открыт", но баланс < 10 000 ₸ —
+// признак компании-однодневки ("спящий" счёт).
+func collectNR5(jobID uint) []models.DetectedRisk {
+	var results []models.DetectedRisk
+
+	// --- Красный флаг: счёт отсутствует ---
+	type noAccountRow struct {
+		BIN              string
+		CompanyName      string
+		AccountStatus    string
+		AuthorizedCapital float64
+		RegDate          time.Time
+		DirectorName     string
+	}
+
+	var noAccountRows []noAccountRow
+	database.DB.Raw(`
+		SELECT
+			b.bin,
+			b.company_name,
+			b.status AS account_status,
+			COALESCE(nr.authorized_capital, 0) AS authorized_capital,
+			nr.reg_date,
+			nr.director_name
+		FROM bank_responses b
+		LEFT JOIN nr_records nr ON nr.bin = b.bin AND nr.job_id = ?
+		WHERE b.status = 'Отсутствует'
+		   OR b.account_number = 'Отсутствует'
+	`, jobID).Scan(&noAccountRows)
+
+	for _, r := range noAccountRows {
+		details := map[string]interface{}{
+			"bin":              r.BIN,
+			"company_name":     r.CompanyName,
+			"director_name":    r.DirectorName,
+			"account_status":   r.AccountStatus,
+			"balance":          0,
+			"authorized_capital": r.AuthorizedCapital,
+			"reason":           "Банковский счёт отсутствует — компания не ведёт реальной деятельности",
+		}
+
+		riskDate := r.RegDate
+		if riskDate.IsZero() {
+			riskDate = time.Now()
+		}
+
+		results = append(results, makeNrRisk(
+			jobID, "NR5",
+			r.CompanyName, r.DirectorName, r.BIN,
+			riskDate, r.AuthorizedCapital, details,
+		))
+	}
+
+	// --- Жёлтый флаг: счёт открыт, но баланс подозрительно низкий ---
+	type lowBalanceRow struct {
+		BIN              string
+		CompanyName      string
+		AccountStatus    string
+		Balance          float64
+		AuthorizedCapital float64
+		RegDate          time.Time
+		DirectorName     string
+	}
+
+	var lowBalanceRows []lowBalanceRow
+	database.DB.Raw(`
+		SELECT
+			b.bin,
+			b.company_name,
+			b.status AS account_status,
+			b.balance,
+			COALESCE(nr.authorized_capital, 0) AS authorized_capital,
+			nr.reg_date,
+			nr.director_name
+		FROM bank_responses b
+		LEFT JOIN nr_records nr ON nr.bin = b.bin AND nr.job_id = ?
+		WHERE b.status ILIKE '%Открыт%'
+		  AND b.balance < 10000
+	`, jobID).Scan(&lowBalanceRows)
+
+	for _, r := range lowBalanceRows {
+		details := map[string]interface{}{
+			"bin":              r.BIN,
+			"company_name":     r.CompanyName,
+			"director_name":    r.DirectorName,
+			"account_status":   r.AccountStatus,
+			"balance":          r.Balance,
+			"authorized_capital": r.AuthorizedCapital,
+			"reason":           "Подозрительно низкий баланс на счёте (менее 10 000 ₸) — признаки компании-однодневки",
+		}
+
+		riskDate := r.RegDate
+		if riskDate.IsZero() {
+			riskDate = time.Now()
+		}
+
+		results = append(results, makeNrRisk(
+			jobID, "NR5",
+			r.CompanyName, r.DirectorName, r.BIN,
+			riskDate, r.AuthorizedCapital, details,
+		))
+	}
+
+	log.Printf("[NR5] Найдено рисков: %d (без счёта: %d, низкий баланс: %d)",
+		len(results), len(noAccountRows), len(lowBalanceRows))
 	return results
 }

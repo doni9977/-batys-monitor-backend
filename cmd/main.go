@@ -103,6 +103,11 @@ func main() {
 	app.Get("/api/risks/nr2", handlers.GetNrRisks("NR2"))
 	app.Get("/api/risks/nr3", handlers.GetNrRisks("NR3"))
 	app.Get("/api/risks/nr4", handlers.GetNrRisks("NR4"))
+	app.Get("/api/risks/nr5", handlers.GetNrRisks("NR5"))
+
+	// Загрузка ответов БВУ (банков) для алгоритма NR5
+	app.Post("/api/upload-bank-responses", handlers.UploadBankResponses)
+
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {

@@ -53,6 +53,7 @@ func main() {
 	// Загрузка данных
 	app.Post("/api/upload", handlers.UploadExcel)
 	app.Post("/api/upload-classifier", handlers.UploadClassifierExcel)
+	app.Post("/api/upload-inpatient", handlers.UploadInpatientExcel)
 
 	// Мониторинг заданий
 	app.Get("/api/risk-jobs/latest", handlers.GetLatestRiskJob)
@@ -82,12 +83,20 @@ func main() {
 	app.Get("/api/risks/a8", handlers.GetRiskA8)
 	app.Get("/api/risks/a10", handlers.GetRiskA10)
 
+	// Риски стационара
+	app.Get("/api/risks/s1", handlers.GetRiskS1)
+	app.Get("/api/risks/s2", handlers.GetRiskS2)
+	app.Get("/api/risks/s3", handlers.GetRiskS3)
+	app.Get("/api/risks/s4", handlers.GetRiskS4)
+	app.Get("/api/risks/s5", handlers.GetRiskS5)
+
 	// Deprecated — оставляем для совместимости с фронтендом
 	app.Get("/api/risks/duplicates", handlers.GetRiskDuplicates)
 
 	// ── Домен: Нерезиденты (КГД) ──────────────────────────────────────────
 	// Загрузка реестра нерезидентов
 	app.Post("/api/upload-nr", handlers.UploadNonResidentExcel)
+	
 
 	// Риски нерезидентов по индикаторам
 	app.Get("/api/risks/nr1", handlers.GetNrRisks("NR1"))

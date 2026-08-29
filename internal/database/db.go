@@ -54,6 +54,7 @@ func ConnectDb() {
 		&models.RiskJob{},
 		&models.NrRecord{},
 		&models.BerkutRecord{},
+		&models.InpatientRecord{},
 		&models.BankResponse{},
 	)
 	if err != nil {

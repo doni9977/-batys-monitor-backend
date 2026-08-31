@@ -68,6 +68,9 @@ func main() {
 	// Экспорт в Excel (новый endpoint — Задача 12)
 	app.Get("/api/export/xlsx", handlers.ExportRisksXlsx)
 
+	// Экспорт в Word (генератор отчетов по врачу/нерезиденту)
+	app.Get("/api/export/report", handlers.GenerateReportDocx)
+
 	// Реестр субъектов (клиники + суммы рисков)
 	app.Get("/api/registry", handlers.GetRegistry)
 

@@ -121,7 +121,7 @@ func collectS3(jobID uint) []models.DetectedRisk {
 			"reason":         "Круглосуточный стационар с пребыванием ≤1 койко-дня",
 		}
 		results = append(results, makeDetectedRisk(
-			jobID, "S3", r.HospitalName, r.DoctorName, "", r.AdmissionDate, r.Amount, details,
+			jobID, "S3", r.HospitalName, r.DoctorName, r.PatientName, r.AdmissionDate, r.Amount, details,
 		))
 	}
 	log.Printf("S3: найдено %d рисков", len(results))
@@ -182,7 +182,7 @@ func collectS2(jobID uint) []models.DetectedRisk {
 			"reason":             "Повторная госпитализация с тем же диагнозом в течение 0–3 дней",
 		}
 		results = append(results, makeDetectedRisk(
-			jobID, "S2", r.HospitalName, r.DoctorName, "", r.AdmissionDate, r.Amount, details,
+			jobID, "S2", r.HospitalName, r.DoctorName, r.PatientName, r.AdmissionDate, r.Amount, details,
 		))
 	}
 	log.Printf("S2: найдено %d рисков", len(results))
@@ -256,6 +256,7 @@ func collectS1(jobID uint) []models.DetectedRisk {
 		PatientName   string
 		PatientDOB    string
 		HospitalName  string
+		DoctorName    string
 		AdmissionDate time.Time
 		DischargeDate time.Time
 		PoliClinic    string
@@ -270,6 +271,7 @@ func collectS1(jobID uint) []models.DetectedRisk {
             i.patient_name,
             i.patient_dob,
             i.hospital_name,
+            i.doctor_name,
             i.admission_date,
             i.discharge_date,
             s.clinic_name  AS poli_clinic,
@@ -303,7 +305,7 @@ func collectS1(jobID uint) []models.DetectedRisk {
 			"reason":         "Услуга в поликлинике в дни, когда пациент лежал в стационаре",
 		}
 		results = append(results, makeDetectedRisk(
-			jobID, "S1", r.HospitalName, "", "", r.ServiceDate, r.ServiceAmount, details,
+			jobID, "S1", r.HospitalName, r.DoctorName, r.PatientName, r.ServiceDate, r.ServiceAmount, details,
 		))
 	}
 	log.Printf("S1: найдено %d рисков", len(results))
@@ -328,6 +330,7 @@ func collectS5(jobID uint) []models.DetectedRisk {
 		PatientName   string
 		PatientDOB    string
 		HospitalName  string
+		DoctorName    string
 		DeathDate     time.Time
 		PoliClinic    string
 		ServiceName   string
@@ -341,6 +344,7 @@ func collectS5(jobID uint) []models.DetectedRisk {
             i.patient_name,
             i.patient_dob,
             i.hospital_name,
+            i.doctor_name,
             i.discharge_date AS death_date,
             s.clinic_name    AS poli_clinic,
             s.service_name,
@@ -372,7 +376,7 @@ func collectS5(jobID uint) []models.DetectedRisk {
 			"reason":        "Услуга в поликлинике после зафиксированной даты смерти пациента",
 		}
 		results = append(results, makeDetectedRisk(
-			jobID, "S5", r.HospitalName, "", "", r.ServiceDate, r.ServiceAmount, details,
+			jobID, "S5", r.HospitalName, r.DoctorName, r.PatientName, r.ServiceDate, r.ServiceAmount, details,
 		))
 	}
 	log.Printf("S5: найдено %d рисков", len(results))

@@ -470,6 +470,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 
 	type row struct {
 		ClinicName     string
+		DoctorName     string
 		PatientIIN     string
 		ServiceCode    string
 		ServiceName    string
@@ -483,6 +484,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 	err := database.DB.Raw(`
         SELECT
             MIN(sr.clinic_name) AS clinic_name,
+            sr.doctor_name,
             sr.patient_iin,
             sr.service_code,
             MIN(sr.service_name) AS service_name,
@@ -494,7 +496,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
         JOIN service_classifiers AS sc ON sc.code = sr.service_code
         WHERE sr.service_date IS NOT NULL
           AND sc.max_per_year > 0
-        GROUP BY sr.patient_iin, sr.service_code, EXTRACT(YEAR FROM sr.service_date)
+        GROUP BY sr.doctor_name, sr.patient_iin, sr.service_code, EXTRACT(YEAR FROM sr.service_date)
         HAVING SUM(GREATEST(sr.quantity, 1)) > MAX(sc.max_per_year)
     `).Scan(&rows).Error
 
@@ -508,6 +510,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 
 		details := map[string]interface{}{
 			"clinic_name":      r.ClinicName,
+			"doctor_name":      r.DoctorName,
 			"patient_iin":      r.PatientIIN,
 			"service_code":     r.ServiceCode,
 			"service_name":     r.ServiceName,
@@ -521,7 +524,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 			jobID,
 			"A7",
 			r.ClinicName,
-			"",
+			r.DoctorName,
 			r.PatientIIN,
 			riskDate,
 			r.TotalAmount,
@@ -639,6 +642,8 @@ func collectA10(jobID uint) []models.DetectedRisk {
               AND BTRIM(COALESCE(sr.clinic_name, '')) <> ''
               AND sr.service_date::time <> TIME '00:00:00'
               AND sc.norm_minutes > 0
+              AND sr.service_code NOT ILIKE 'B%'
+              AND sr.service_code NOT ILIKE 'A%'
             WINDOW physician_services AS (PARTITION BY sr.doctor_name, sr.service_date::date ORDER BY sr.service_date, sr.id)
         )
         SELECT

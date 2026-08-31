@@ -1,0 +1,476 @@
+import sys
+import json
+import docx
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+import os
+
+def get_indicator_title(indicator):
+    titles = {
+        "A1": "Возрастные ограничения",
+        "A2": "Гендерные ограничения",
+        "A3": "Сверхнагрузка врача",
+        "A4": "Превышение дневного лимита",
+        "A7": "Превышение годового лимита",
+        "A8": "Завышение стоимости",
+        "A10": "Нарушение интервала",
+        "NR1": "Фиктивное присутствие",
+        "NR2": "Транзитный туризм",
+        "NR3": "Аффилированные сети",
+        "NR4": "Финансовая пустышка",
+        "NR5": "Финансовая неактивность",
+        "S1": "Кросс-чек поликлиника/стационар",
+        "S2": "Дробление госпитализации",
+        "S3": "Фиктивный стационар",
+        "S4": "Аномальная экстренность",
+        "S5": "Услуги после смерти",
+    }
+    return titles.get(indicator, f"Алгоритм {indicator}")
+
+def generate_algorithm_report(data, output_path):
+    doc = docx.Document()
+    style = doc.styles['Normal']
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(12)
+
+    indicator = data.get('indicator', 'Unknown')
+    title = get_indicator_title(indicator)
+    
+    h = doc.add_heading(f'Справка по нарушениям алгоритма {indicator}', 1)
+    
+    doc.add_paragraph(f'Наименование нарушения: {title}', style='List Bullet')
+    doc.add_paragraph(f'Всего выявлено нарушений: {data.get("total_risks", 0)}', style='List Bullet')
+    if indicator == "A10":
+        total_missed = 0
+        for r in data.get('risks', []):
+            d = r.get('details', {})
+            req = float(d.get('required_interval_minutes', 0))
+            act = float(d.get('actual_interval_minutes', 0))
+            if req > act:
+                total_missed += (req - act)
+        doc.add_paragraph(f'Суммарное отклонение от норматива: {int(total_missed):,} минут'.replace(',', ' '), style='List Bullet')
+    elif indicator == "A3":
+        doc.add_paragraph(f'Общее количество услуг сверх нормы: {int(data.get("total_amount", 0)):,}'.replace(',', ' '), style='List Bullet')
+    elif indicator in ["A1", "A2"]:
+        pass # Убираем строку об ущербе для A1 и A2
+    elif not indicator.startswith("NR"):
+        doc.add_paragraph(f'Общая сумма потенциального ущерба: {data.get("total_amount", 0):,.2f} тенге', style='List Bullet')
+    risks = data.get('risks', [])
+    if not risks:
+        doc.add_paragraph('Нарушений по данному алгоритму не найдено.')
+        doc.save(output_path)
+        return
+
+    p_header = doc.add_paragraph()
+    run = p_header.add_run('\nДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО ВЫЯВЛЕННЫМ РИСКАМ:')
+    run.bold = True
+    
+    # ─── Специальная обработка для ОСМС (A) ───
+    if indicator.startswith("A"):
+        intro_p = doc.add_paragraph()
+        if indicator == "A1":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nУстановлено, что выявлены факты оказания услуг, не соответствующих возрастной категории пациентов (согласно таблице ниже). К примеру, взрослым пациентам или новорожденным оказывались услуги, предназначенные для совершенно других возрастных групп.\n\nДанные факты указывают на возможные приписки с целью необоснованного получения выплат из фонда ОСМС.")
+        elif indicator == "A2":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nУстановлено, что выявлены факты оказания услуг, не соответствующих половой принадлежности пациентов (согласно таблице ниже). Пациентам была оказана специфическая медицинская услуга, предназначенная исключительно для противоположного пола.\n\nДанные факты свидетельствуют о внесении недостоверных сведений в информационные системы и указывают на прямые признаки фиктивного оказания услуг (приписок).")
+        elif indicator == "A3":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nПри анализе выявлены факты аномальной нагрузки на медицинский персонал, физически превышающие нормативы рабочего времени. Зафиксированы дни со сверхвысоким количеством принятых пациентов.\n\nФизическая невозможность оказания такого объема медицинских услуг в течение одной рабочей смены свидетельствует о признаках приписок.")
+        elif indicator == "A4":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nПри изучении сведений выявлены факты необоснованного дублирования медицинских услуг. Установлено, что пациентам в один и тот же день (либо за короткий промежуток времени) неоднократно выставлялась одна и та же услуга.\n\nУказанное является нарушением стандартов оказания медицинской помощи и указывает на искусственное завышение объема оказанных услуг.")
+        elif indicator == "A7":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nВ ходе накопительного анализа оказанных услуг за год выявлены факты превышения физиологически возможных норм на одного пациента. Установлено, что пациентам в течение года оказывались услуги в количестве, превышающем годовой лимит и физические возможности человеческого организма.\n\nДанные отклонения носят систематический характер и свидетельствуют о масштабном формировании фиктивных записей.")
+        elif indicator == "A8":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nУстановлено, что выявлены факты искусственного завышения стоимости оказанных услуг (upcoding). К примеру, при лечении пациентов применялись коды медицинских услуг с более высоким тарифом, применение которых не было обосновано фактическим возрастом или диагнозом пациента.\n\nДанные действия приводят к нецелевому расходованию бюджетных средств Фонда социального медицинского страхования.")
+        elif indicator == "A10":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nВыявлены множественные случаи несоответствия заявленной сложности медицинских услуг их фактической продолжительности. У врачей зафиксировано оказание медицинских услуг с аномально коротким интервалом между пациентами.\n\nНормативная сложность и протокол проведения данных операций подразумевают значительно большую затрату времени. Отчётливо прослеживается строгий интервал между услугами, что указывает на пакетное (массовое) внесение данных в информационные системы задним числом.")
+
+        if indicator in ["A1", "A2"]:
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Врач'
+            h[2].text = 'ИИН пациента'
+            h[3].text = 'Возраст' if indicator == "A1" else 'Пол'
+            h[4].text = 'Услуга'
+            h[5].text = 'Код'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('doctor_name', ''))
+                row[2].text = str(r.get('patient_iin', ''))
+                val = str(d.get('patient_age', '')) if indicator == "A1" else str(d.get('patient_gender', ''))
+                row[3].text = val
+                row[4].text = str(d.get('service_name', ''))
+                row[5].text = str(d.get('service_code', ''))
+
+        elif indicator == "A3":
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Врач'
+            h[2].text = 'Дата'
+            h[3].text = 'Оказано услуг'
+            h[4].text = 'Лимит'
+            h[5].text = 'Превышение (услуг)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('doctor_name', ''))
+                row[2].text = str(r.get('risk_date', ''))[:10]
+                row[3].text = str(d.get('service_count', d.get('daily_count', '')))
+                row[4].text = str(d.get('threshold', 200))
+                row[5].text = f"{int(r.get('amount', 0)):,}".replace(',', ' ')
+
+        elif indicator in ["A4", "A7"]:
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Врач'
+            h[2].text = 'ИИН пациента'
+            h[3].text = 'Услуга'
+            h[4].text = 'Оказано раз'
+            h[5].text = 'Лимит'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('doctor_name', ''))
+                row[2].text = str(r.get('patient_iin', ''))
+                row[3].text = str(d.get('service_name', ''))
+                row[4].text = str(d.get('total_count', d.get('total_quantity', '')))
+                row[5].text = str(d.get('allowed_per_day', d.get('allowed_per_year', '')))
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "A8":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Врач'
+            h[2].text = 'ИИН пациента'
+            h[3].text = 'Услуга'
+            h[4].text = 'Сумма факт'
+            h[5].text = 'Тариф (макс)'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('doctor_name', ''))
+                row[2].text = str(r.get('patient_iin', ''))
+                row[3].text = str(d.get('service_name', ''))
+                row[4].text = str(d.get('actual_amount', ''))
+                row[5].text = str(d.get('allowed_amount', ''))
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "A10":
+            table = doc.add_table(rows=1, cols=8)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Врач'
+            h[2].text = 'ИИН пациента'
+            h[3].text = 'Пред. услуга'
+            h[4].text = 'Тек. услуга'
+            h[5].text = 'Инт. факт'
+            h[6].text = 'Инт. норма'
+            h[7].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('doctor_name', ''))
+                row[2].text = str(r.get('patient_iin', ''))
+                row[3].text = str(d.get('previous_service_code', ''))
+                row[4].text = str(d.get('service_code', ''))
+                row[5].text = str(d.get('actual_interval_minutes', ''))
+                row[6].text = str(d.get('required_interval_minutes', ''))
+                row[7].text = f"{r.get('amount', 0):,.0f}"
+                
+        for cell in table.rows[0].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.bold = True
+
+    # ─── Специальная обработка для Нерезидентов (NR) ───
+    elif indicator.startswith("NR"):
+        intro_p = doc.add_paragraph()
+        if indicator == "NR1":
+            intro_p.add_run("Справка по результатам аналитической работы. Установлено, что в указанный период были зарегистрированы нижеперечисленные юридические лица, руководителями и учредителями которых выступают нерезиденты.\n\nВ ходе сопоставления сведений с базами данных ПС КНБ РК установлено, что указанные граждане не пересекали государственную границу Республики Казахстан в период государственной регистрации юридических лиц. Процедура регистрации осуществлялась дистанционно с использованием доверенностей.\n\nВышеуказанные факты свидетельствуют о фиктивном характере создания юридических лиц без намерений осуществлять фактическое руководство компанией.")
+        elif indicator == "NR2":
+            intro_p.add_run("Справка по результатам аналитической работы. Изучением сведений о пересечении государственной границы установлено, что нерезиденты (согласно таблице ниже) осуществили въезд в РК на одних и тех же транспортных средствах. Срок их пребывания на территории РК составил минимальное количество дней.\n\nВ этот период на их имена были зарегистрированы юридические лица. Дополнительно установлено, что на указанных транспортных средствах границу пересекали и иные нерезиденты с целью массовой регистрации юридических лиц, что указывает на организованный ввоз номинальных руководителей.")
+        elif indicator == "NR3":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе проведения анализа выявлена группа аффилированных лиц, оказывающих посреднические услуги по массовой регистрации компаний в интересах нерезидентов.\n\nУстановлено, что одни и те же нотариусы и переводчики (согласно таблице) неоднократно выступали посредниками при регистрации иных рисковых юридических лиц, оформленных на нерезидентов. Данный механизм позволяет нерезидентам создавать юридические лица конвейерным способом, что создает предпосылки для их использования в противоправных схемах.")
+        elif indicator == "NR4":
+            intro_p.add_run("Справка по результатам аналитической работы. Изучением финансово-хозяйственной деятельности нижеперечисленных компаний, зарегистрированных на нерезидентов, установлены признаки фиктивности.\n\nПо данным информационных систем КГД МФ РК, у товариществ отсутствуют обороты по приобретению и реализации товаров, работ и услуг, налоги не уплачивались (либо уплачены в минимальном размере), количество работников составляет 0 человек.\n\nПри этом, согласно банковским выпискам, обороты по счетам компаний носят аномальный характер. Поступившие средства конвертируются и выводятся за рубеж. Фактический импорт, экспорт и налоговые отчисления отсутствуют, компании фактически являются бездействующими.")
+        elif indicator == "NR5":
+            intro_p.add_run("Справка по результатам аналитической работы. Установлено, что нижеперечисленные ТОО под руководством нерезидентов осуществляют вывод валютных ценностей за пределы Республики Казахстан.\n\nТовариществами заключены международные контракты на поставку товаров. Компании осуществили перевод денежных средств в адрес нерезидентов на крупные суммы.\n\nПри этом, по данным таможенных систем, фактическая поставка товара на территорию РК не осуществлена, возврат денежных средств не произведен. Вышеуказанные факты указывают на признаки уголовного правонарушения, предусмотренного ст. 235-1 УК РК (Незаконный вывод валютных ценностей).")
+
+        if indicator == "NR1":
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = '№'
+            hdr_cells[1].text = 'Дата регистрации'
+            hdr_cells[2].text = 'Название ТОО'
+            hdr_cells[3].text = 'БИН'
+            hdr_cells[4].text = 'ФИО нерезидента'
+            hdr_cells[5].text = 'ИИН / Паспорт'
+            
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(d.get('reg_date', r.get('risk_date', ''))[:10])
+                row[2].text = str(d.get('company_name', r.get('clinic_name', '')))
+                row[3].text = str(d.get('bin', r.get('patient_iin', '')))
+                row[4].text = str(d.get('director_name', r.get('doctor_name', '')))
+                row[5].text = str(d.get('director_iin', 'нет данных'))
+
+        elif indicator == "NR2":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = '№'
+            hdr_cells[1].text = 'Название ТОО'
+            hdr_cells[2].text = 'БИН'
+            hdr_cells[3].text = 'ФИО нерезидента'
+            hdr_cells[4].text = 'Авто (ГРНЗ)'
+            hdr_cells[5].text = 'КПП'
+            hdr_cells[6].text = 'Дней в РК'
+            
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(d.get('company_name', r.get('clinic_name', '')))
+                row[2].text = str(d.get('bin', r.get('patient_iin', '')))
+                row[3].text = str(d.get('director_name', r.get('doctor_name', '')))
+                row[4].text = str(d.get('vehicle_plate', ''))
+                row[5].text = str(d.get('crossing_point', ''))
+                row[6].text = str(d.get('stay_days', ''))
+
+        elif indicator == "NR3":
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = '№'
+            hdr_cells[1].text = 'Название ТОО'
+            hdr_cells[2].text = 'БИН'
+            hdr_cells[3].text = 'ФИО нерезидента'
+            hdr_cells[4].text = 'Переводчик'
+            hdr_cells[5].text = 'Нотариус'
+            
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(d.get('company_name', r.get('clinic_name', '')))
+                row[2].text = str(d.get('bin', r.get('patient_iin', '')))
+                row[3].text = str(d.get('director_name', r.get('doctor_name', '')))
+                row[4].text = str(d.get('translator', ''))
+                row[5].text = str(d.get('notary', ''))
+
+        elif indicator == "NR4":
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = '№'
+            hdr_cells[1].text = 'Название ТОО'
+            hdr_cells[2].text = 'БИН'
+            hdr_cells[3].text = 'ФИО нерезидента'
+            hdr_cells[4].text = 'Уставной капитал'
+            hdr_cells[5].text = 'Вид деятельности'
+            
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(d.get('company_name', r.get('clinic_name', '')))
+                row[2].text = str(d.get('bin', r.get('patient_iin', '')))
+                row[3].text = str(d.get('director_name', r.get('doctor_name', '')))
+                row[4].text = str(d.get('authorized_capital', ''))
+                row[5].text = str(d.get('activity_type', ''))
+
+        elif indicator == "NR5":
+            table = doc.add_table(rows=1, cols=6)
+            table.style = 'Table Grid'
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = '№'
+            hdr_cells[1].text = 'Название ТОО'
+            hdr_cells[2].text = 'БИН'
+            hdr_cells[3].text = 'ФИО нерезидента'
+            hdr_cells[4].text = 'Статус счета'
+            hdr_cells[5].text = 'Баланс (₸)'
+            
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(d.get('company_name', r.get('clinic_name', '')))
+                row[2].text = str(d.get('bin', r.get('patient_iin', '')))
+                row[3].text = str(d.get('director_name', r.get('doctor_name', '')))
+                row[4].text = str(d.get('account_status', ''))
+                row[5].text = str(d.get('balance', ''))
+        
+        for cell in table.rows[0].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.bold = True
+
+    # ─── Специальная обработка для Стационара (S) ───
+    elif indicator.startswith("S"):
+        intro_p = doc.add_paragraph()
+        if indicator == "S1":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nУстановлено, что выявлены факты необоснованного дублирования медицинских услуг, свидетельствующие о фиктивном характере их оказания. Так, при перекрестном анализе баз данных установлено, что пациенты (согласно таблице ниже), формально находившиеся на лечении в круглосуточном стационаре, в эти же даты получали амбулаторно-поликлинические услуги у врачей.\n\nДанные факты являются прямым признаком формирования фиктивных записей (\"мертвых душ\").")
+        elif indicator == "S2":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nВ ходе анализа выявлены факты искусственного дробления случаев госпитализации с целью необоснованного увеличения выплат от Фонда социального медицинского страхования. Установлено, что врачами неоднократно производилась выписка пациентов из стационара с их последующей повторной госпитализацией в течение 1-3 дней с тем же клиническим диагнозом.\n\nУказанные факты свидетельствуют о необоснованном разделении единого длительного случая лечения на несколько эпизодов для искусственного создания повторных госпитализаций.")
+        elif indicator == "S3":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nВыявлены факты неправомерного выставления счетов за услуги круглосучного стационара. Установлено, что врачами оформлялись случаи госпитализации с видом медицинской помощи \"Круглосуточный стационар\", при этом фактическое количество проведенных койко-дней составило 0 или 1 день, а исход пребывания отмечен как \"Выписан\" (согласно таблице).\n\nОказание амбулаторных услуг либо услуг дневного стационара под видом более дорогого круглосуточного тарифа свидетельствует о признаках неправомерного завышения затрат.")
+        elif indicator == "S4":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nПри изучении сведений о госпитализации выявлены факты аномального использования флага \"Экстренно\" (применяемого для более дорогого тарифа и госпитализации без направления). Установлено, что в отделениях зафиксирован нехарактерно высокий процент (свыше 90%) экстренных госпитализаций пациентов с плановыми диагнозами по МКБ-10.\n\nВыявленные случаи обладают признаками искусственного завышения уровня экстренности (накрутки) за счет применения повышенных тарифов.")
+        elif indicator == "S5":
+            intro_p.add_run("Справка по результатам аналитической работы. В ходе мониторинга оказания медицинских услуг в рамках ОСМС изучены сведения по медицинским организациям.\n\nВ результате сверки баз данных выявлены грубые нарушения, выразившиеся в фиктивном оказании медицинских услуг. Установлено, что врачами производилось выставление счетов за медицинские услуги и медикаменты пациентам (согласно таблице), в отношении которых ранее был зафиксирован исход лечения \"Умер\" (либо дата смерти подтверждена органами ЗАГС).\n\nУказанные действия содержат явные признаки умышленного хищения бюджетных средств путем формирования фиктивных счетов.")
+
+        if indicator == "S1":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Стационар'
+            h[2].text = 'Лечащий врач'
+            h[3].text = 'Пациент'
+            h[4].text = 'Дата поликл.'
+            h[5].text = 'Госпитализация'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('clinic_name', ''))
+                row[2].text = str(r.get('doctor_name', ''))
+                row[3].text = str(r.get('patient_iin', ''))
+                row[4].text = str(d.get('service_date', ''))
+                row[5].text = f"{d.get('admission_date', '')} - {d.get('discharge_date', '')}"
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "S2":
+            table = doc.add_table(rows=1, cols=8)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Стационар'
+            h[2].text = 'Лечащий врач'
+            h[3].text = 'Пациент'
+            h[4].text = 'МКБ-10'
+            h[5].text = 'Пред. выписка'
+            h[6].text = 'Нов. поступление'
+            h[7].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('clinic_name', ''))
+                row[2].text = str(r.get('doctor_name', ''))
+                row[3].text = str(r.get('patient_iin', ''))
+                row[4].text = str(d.get('icd10_code', ''))
+                row[5].text = str(d.get('prev_discharge', ''))
+                row[6].text = str(d.get('new_admission_date', ''))
+                row[7].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "S3":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Стационар'
+            h[2].text = 'Лечащий врач'
+            h[3].text = 'Пациент'
+            h[4].text = 'МКБ-10'
+            h[5].text = 'Койко-дни'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('clinic_name', ''))
+                row[2].text = str(r.get('doctor_name', ''))
+                row[3].text = str(r.get('patient_iin', ''))
+                row[4].text = str(d.get('icd10_code', ''))
+                row[5].text = str(d.get('bed_days', ''))
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "S4":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Стационар'
+            h[2].text = 'Отделение/Врач'
+            h[3].text = 'Всего пациентов'
+            h[4].text = 'Экстренных'
+            h[5].text = 'Процент (%)'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('clinic_name', ''))
+                doc_name = str(r.get('doctor_name', ''))
+                dept = str(d.get('department', ''))
+                row[2].text = f"{doc_name} / {dept}" if dept else doc_name
+                row[3].text = str(d.get('total_patients', ''))
+                row[4].text = str(d.get('emergency_patients', ''))
+                row[5].text = str(d.get('emergency_percent', ''))
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        elif indicator == "S5":
+            table = doc.add_table(rows=1, cols=7)
+            table.style = 'Table Grid'
+            h = table.rows[0].cells
+            h[0].text = '№'
+            h[1].text = 'Стационар'
+            h[2].text = 'Лечащий врач'
+            h[3].text = 'Пациент'
+            h[4].text = 'Дата смерти'
+            h[5].text = 'Дата услуги'
+            h[6].text = 'Ущерб (₸)'
+            for i, r in enumerate(risks):
+                d = r.get('details', {})
+                row = table.add_row().cells
+                row[0].text = str(i+1)
+                row[1].text = str(r.get('clinic_name', ''))
+                row[2].text = str(r.get('doctor_name', ''))
+                row[3].text = str(r.get('patient_iin', ''))
+                row[4].text = str(d.get('death_date', ''))
+                row[5].text = str(d.get('service_date', ''))
+                row[6].text = f"{r.get('amount', 0):,.0f}"
+
+        for cell in table.rows[0].cells:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.bold = True
+
+    doc.save(output_path)
+
+def main():
+    input_data = sys.stdin.read()
+    if not input_data.strip():
+        sys.exit(1)
+        
+    data = json.loads(input_data)
+    indicator = data.get('indicator', 'Unknown')
+    
+    os.makedirs('tmp_reports', exist_ok=True)
+    output_path = f"tmp_reports/report_{indicator}.docx"
+    
+    generate_algorithm_report(data, output_path)
+    print(output_path)
+
+if __name__ == "__main__":
+    main()

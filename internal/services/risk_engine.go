@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
@@ -321,19 +322,44 @@ func collectA3(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
+		ClinicName   string
 		DoctorName   string
-		ServiceDate  time.Time
+		ServiceHour  time.Time
 		ServiceCount int
+		ThresholdType string // "per_hour" или "per_day"
 	}
 
+	// Групируем по часам и ловим те, где > 80 услуг/час (БАГ #4 FIX)
 	rows := []row{}
 	err := database.DB.Raw(`
+        -- 80 услуг в час
         SELECT
+            clinic_name,
             doctor_name,
-            service_date::date AS service_date,
-            COUNT(*) AS service_count
+            DATE_TRUNC('hour', service_date)::timestamp AS service_hour,
+            COUNT(*) AS service_count,
+            'per_hour' AS threshold_type
         FROM service_records
-        GROUP BY doctor_name, service_date::date
+        WHERE BTRIM(COALESCE(clinic_name, '')) <> ''
+          AND BTRIM(COALESCE(doctor_name, '')) <> ''
+          AND service_date IS NOT NULL
+        GROUP BY clinic_name, doctor_name, DATE_TRUNC('hour', service_date)
+        HAVING COUNT(*) > 80
+        
+        UNION ALL
+        
+        -- 200 услуг в день
+        SELECT
+            clinic_name,
+            doctor_name,
+            DATE_TRUNC('day', service_date)::timestamp AS service_hour,
+            COUNT(*) AS service_count,
+            'per_day' AS threshold_type
+        FROM service_records
+        WHERE BTRIM(COALESCE(clinic_name, '')) <> ''
+          AND BTRIM(COALESCE(doctor_name, '')) <> ''
+          AND service_date IS NOT NULL
+        GROUP BY clinic_name, doctor_name, DATE_TRUNC('day', service_date)
         HAVING COUNT(*) > 200
     `).Scan(&rows).Error
 
@@ -343,21 +369,28 @@ func collectA3(jobID uint) []models.DetectedRisk {
 	}
 
 	for _, r := range rows {
+		threshold := 80
+		if r.ThresholdType == "per_day" {
+			threshold = 200
+		}
+		
 		details := map[string]interface{}{
+			"clinic_name":   r.ClinicName,
 			"doctor_name":   r.DoctorName,
-			"service_date":  r.ServiceDate.Format("2006-01-02"),
+			"service_hour":  r.ServiceHour.Format("2006-01-02 15:04"),
 			"service_count": r.ServiceCount,
-			"threshold":     200,
+			"threshold":     threshold,
+			"unit":          r.ThresholdType,
 		}
 
 		results = append(results, makeDetectedRisk(
 			jobID,
 			"A3",
-			"",
+			r.ClinicName,
 			r.DoctorName,
 			"",
-			r.ServiceDate,
-			float64(r.ServiceCount-200),
+			r.ServiceHour,
+			float64(r.ServiceCount-threshold),
 			details,
 		))
 	}
@@ -369,32 +402,38 @@ func collectA4(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
-		PatientIIN       string
-		ServiceCode      string
-		ServiceName      string
-		RiskDate         time.Time
-		TotalCount       int
-		TotalAmount      float64
-		ClinicCount      int
-		DifferentClinics bool
-		Clinics          string
+		ClinicName    string
+		DoctorName    string
+		PatientIIN    string
+		ServiceCode   string
+		ServiceName   string
+		RiskDate      time.Time
+		TotalCount    int
+		AllowedPerDay int
+		TotalAmount   float64
 	}
 
 	rows := []row{}
 	err := database.DB.Raw(`
+        -- A4: превышение дневного лимита у одного врача (БАГ #2 FIX)
         SELECT
-            patient_iin,
-            service_code,
-            MIN(service_name) AS service_name,
-            service_date::date AS risk_date,
+            MIN(sr.clinic_name) AS clinic_name,
+            sr.doctor_name,
+            sr.patient_iin,
+            sr.service_code,
+            MIN(sr.service_name) AS service_name,
+            sr.service_date::date AS risk_date,
             COUNT(*) AS total_count,
-            COALESCE(SUM(amount), 0) AS total_amount,
-            COUNT(DISTINCT clinic_name) AS clinic_count,
-            COUNT(DISTINCT clinic_name) > 1 AS different_clinics,
-            STRING_AGG(DISTINCT clinic_name, ', ' ORDER BY clinic_name) AS clinics
-        FROM service_records
-        GROUP BY patient_iin, service_code, service_date::date
-        HAVING COUNT(*) > 1
+            MAX(sc.max_per_day) AS allowed_per_day,
+            COALESCE(SUM(sr.amount), 0) AS total_amount
+        FROM service_records AS sr
+        JOIN service_classifiers AS sc ON sc.code = sr.service_code
+        WHERE BTRIM(COALESCE(sr.patient_iin, '')) <> ''
+          AND BTRIM(COALESCE(sr.doctor_name, '')) <> ''
+          AND sc.max_per_day > 0
+        GROUP BY sr.patient_iin, sr.doctor_name, sr.service_code, sr.service_date::date
+        HAVING COUNT(*) > MAX(sc.max_per_day)
+        ORDER BY total_count DESC
     `).Scan(&rows).Error
 
 	if err != nil {
@@ -404,22 +443,22 @@ func collectA4(jobID uint) []models.DetectedRisk {
 
 	for _, r := range rows {
 		details := map[string]interface{}{
-			"patient_iin":       r.PatientIIN,
-			"service_code":      r.ServiceCode,
-			"service_name":      r.ServiceName,
-			"date":              r.RiskDate.Format("2006-01-02"),
-			"total_count":       r.TotalCount,
-			"total_amount":      r.TotalAmount,
-			"clinic_count":      r.ClinicCount,
-			"different_clinics": r.DifferentClinics,
-			"clinics":           r.Clinics,
+			"clinic_name":     r.ClinicName,
+			"doctor_name":     r.DoctorName,
+			"patient_iin":     r.PatientIIN,
+			"service_code":    r.ServiceCode,
+			"service_name":    r.ServiceName,
+			"date":            r.RiskDate.Format("2006-01-02"),
+			"total_count":     r.TotalCount,
+			"allowed_per_day": r.AllowedPerDay,
+			"total_amount":    r.TotalAmount,
 		}
 
 		results = append(results, makeDetectedRisk(
 			jobID,
 			"A4",
-			"",
-			"",
+			r.ClinicName,
+			r.DoctorName,
 			r.PatientIIN,
 			r.RiskDate,
 			r.TotalAmount,
@@ -434,6 +473,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
+		ClinicName     string
 		PatientIIN     string
 		ServiceCode    string
 		ServiceName    string
@@ -446,6 +486,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 	rows := []row{}
 	err := database.DB.Raw(`
         SELECT
+            MIN(sr.clinic_name) AS clinic_name,
             sr.patient_iin,
             sr.service_code,
             MIN(sr.service_name) AS service_name,
@@ -470,6 +511,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 		riskDate := time.Date(r.Year, 1, 1, 0, 0, 0, 0, time.UTC)
 
 		details := map[string]interface{}{
+			"clinic_name":      r.ClinicName,
 			"patient_iin":      r.PatientIIN,
 			"service_code":     r.ServiceCode,
 			"service_name":     r.ServiceName,
@@ -482,7 +524,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 		results = append(results, makeDetectedRisk(
 			jobID,
 			"A7",
-			"",
+			r.ClinicName,
 			"",
 			r.PatientIIN,
 			riskDate,
@@ -512,6 +554,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
 
 	rows := []row{}
 	err := database.DB.Raw(`
+        -- A8: превышение тарифа с допуском 20% (БАГ #5 FIX)
         SELECT
             sr.clinic_name,
             sr.doctor_name,
@@ -522,13 +565,11 @@ func collectA8(jobID uint) []models.DetectedRisk {
             GREATEST(sr.quantity, 1) AS quantity,
             sr.amount AS actual_amount,
             (sc.tariff * GREATEST(sr.quantity, 1)) AS allowed_amount,
-            (sr.amount - sc.tariff * GREATEST(sr.quantity, 1)) AS excess_amount
+            (sr.amount - sc.tariff * GREATEST(sr.quantity, 1) * 1.20) AS excess_amount
         FROM service_records AS sr
         JOIN service_classifiers AS sc ON sc.code = sr.service_code
         WHERE sc.tariff > 0
-          AND sr.amount > sc.tariff * GREATEST(sr.quantity, 1)
-        ORDER BY excess_amount DESC
-    `).Scan(&rows).Error
+          AND sr.amount > sc.tariff * GREATEST(sr.quantity, 1) * 1.20
 
 	if err != nil {
 		log.Printf("A8 query failed: %v", err)
@@ -568,6 +609,7 @@ func collectA10(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
+		ClinicName              string
 		DoctorName              string
 		PreviousServiceCode     string
 		PreviousServiceName     string
@@ -581,8 +623,10 @@ func collectA10(jobID uint) []models.DetectedRisk {
 
 	rows := []row{}
 	err := database.DB.Raw(`
+        -- A10: интервал между услугами (БАГ #6 FIX - добавили дату в PARTITION)
         WITH ordered_services AS (
             SELECT
+                sr.clinic_name,
                 sr.doctor_name,
                 sr.service_code,
                 sr.service_name,
@@ -594,11 +638,15 @@ func collectA10(jobID uint) []models.DetectedRisk {
             FROM service_records AS sr
             JOIN service_classifiers AS sc ON sc.code = sr.service_code
             WHERE sr.doctor_name <> ''
+              AND BTRIM(COALESCE(sr.clinic_name, '')) <> ''
               AND sr.service_date::time <> TIME '00:00:00'
               AND sc.norm_minutes > 0
-            WINDOW physician_services AS (PARTITION BY sr.doctor_name ORDER BY sr.service_date, sr.id)
-        )
+            WINDOW physician_services AS (
+                PARTITION BY sr.doctor_name, sr.service_date::date
+                ORDER BY sr.service_date, sr.id
+            )
         SELECT
+            clinic_name,
             doctor_name,
             previous_service_code,
             previous_service_name,
@@ -624,6 +672,7 @@ func collectA10(jobID uint) []models.DetectedRisk {
 		amount := float64(r.RequiredIntervalMinutes - r.ActualIntervalMinutes)
 
 		details := map[string]interface{}{
+			"clinic_name":               r.ClinicName,
 			"doctor_name":               r.DoctorName,
 			"previous_service_code":     r.PreviousServiceCode,
 			"previous_service_name":     r.PreviousServiceName,
@@ -638,7 +687,7 @@ func collectA10(jobID uint) []models.DetectedRisk {
 		results = append(results, makeDetectedRisk(
 			jobID,
 			"A10",
-			"",
+			r.ClinicName,
 			r.DoctorName,
 			"",
 			r.ServiceDate,

@@ -40,6 +40,13 @@ func UploadExcel(c *fiber.Ctx) error {
 
 	log.Println("Начинаем загрузку данных в PostgreSQL...")
 
+	// Очищаем таблицу перед новой загрузкой (БАГ #1 FIX)
+	if err := database.DB.Exec("TRUNCATE TABLE service_records RESTART IDENTITY;").Error; err != nil {
+		log.Printf("Предупреждение: не удалось очистить таблицу service_records: %v", err)
+	} else {
+		log.Println("Таблица service_records очищена.")
+	}
+
 	result := database.DB.CreateInBatches(&records, 1000)
 	if result.Error != nil {
 		log.Printf("Ошибка при сохранении в БД: %v", result.Error)

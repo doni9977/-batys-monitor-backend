@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
@@ -16,12 +17,18 @@ func UploadClassifierExcel(c *fiber.Ctx) error {
 		})
 	}
 
-	tempPath := filepath.Join("./", file.Filename)
+	// Сохраняем в ./tmp директорию для отслеживания и удаления (БАГ #9 FIX)
+	os.MkdirAll("./tmp", os.ModePerm)
+	tempPath := filepath.Join("./tmp", file.Filename)
+
 	if err := c.SaveFile(file, tempPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Не удалось сохранить временный файл",
 		})
 	}
+
+	// Гарантированно удаляем временный файл после обработки
+	defer os.Remove(tempPath)
 
 	classifiers, err := parser.ParseClassifierExcel(tempPath)
 	if err != nil {

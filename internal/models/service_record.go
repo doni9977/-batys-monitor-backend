@@ -15,7 +15,7 @@ type ServiceRecord struct {
 	PatientDOB     string    // "Дата рождения" (оставляем строкой для простоты парсинга)
 	ServiceCode    string    `gorm:"index"` // "Код услуги"
 	ServiceName    string    // "Услуга"
-	ServiceDate    time.Time `gorm:"index"` // "Дата услуги" и "Период услуги"
+	ServiceDate    time.Time `gorm:"type:timestamptz;index"` // "Дата услуги" и "Период услуги"
 	Quantity       int       // "Количество"
 	Amount         float64   // "Сумма" (для проверки A8 Upcoding)
 	DiagnosisMKB10 string    // "Код диагноза МКБ10"

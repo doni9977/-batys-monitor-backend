@@ -69,7 +69,7 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	qtyIdx := findColIndex("количеств")
 	amountIdx := findColIndex("сумм")
 	diagIdx := findColIndex("мкб", "диагноз")
-	clinicIdx := findColIndex("поставщик", "организация", "клиник")
+	clinicIdx := findColIndex("поставщик", "организация", "клиника", "клиник")
 
 	var records []models.ServiceRecord
 
@@ -97,13 +97,13 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 
 		serviceDate := parseServiceDate(getValByIndex(dateIdx), use1904Dates)
 
-		doctorName := getValByIndex(doctorIdx)
-		if doctorName == "" {
-			doctorName = "Неизвестный врач"
+		doctorName := normalizeName(getValByIndex(doctorIdx))
+		if doctorName == "" || isIgnorableName(doctorName) {
+			continue
 		}
 
 		record := models.ServiceRecord{
-			ClinicName:     getValByIndex(clinicIdx),
+			ClinicName:     normalizeName(getValByIndex(clinicIdx)),
 			DoctorName:     doctorName,
 			PatientIIN:     getValByIndex(iinIdx),
 			PatientGender:  getValByIndex(genderIdx),
@@ -144,6 +144,20 @@ func normalizeHeader(value string) string {
 	}, strings.ToLower(strings.TrimSpace(value)))
 }
 
+func normalizeName(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+}
+
+func isIgnorableName(value string) bool {
+	cleaned := normalizeName(value)
+	if cleaned == "" {
+		return true
+	}
+
+	lower := strings.ToLower(cleaned)
+	return strings.Contains(lower, "пустое имя") || strings.Contains(lower, "empty name")
+}
+
 // parseServiceDate accepts both Excel serial values and the textual date
 // representations encountered in source reports.
 func parseServiceDate(value string, use1904Dates bool) time.Time {
@@ -160,16 +174,38 @@ func parseServiceDate(value string, use1904Dates bool) time.Time {
 
 	value = strings.Join(strings.Fields(value), " ")
 	formats := []string{
-		"02.01.2006", "02.01.06", "02.01.2006 15:04", "02.01.06 15:04",
-		"02.01.2006 15:04:05", "02.01.06 15:04:05",
-		"2006-01-02", "2006-01-02 15:04", "2006-01-02 15:04:05",
-		"02-01-2006", "02-01-06", "02-01-2006 15:04", "02-01-06 15:04",
-		"02/01/2006", "02/01/06", "02/01/2006 15:04", "02/01/06 15:04",
+		// Date-time values from Excel with hours and minutes: 07.09.23 17:02
+		"02.01.06 15:04", "02.01.06 15:04:05",
+		"02.01.2006 15:04", "02.01.2006 15:04:05",
+		"2.1.06 15:04", "2.1.2006 15:04",
+		"02.01.06", "02.01.2006",
+		"2006-01-02 15:04", "2006-01-02 15:04:05", "2006-01-02",
+		"02-01-06 15:04", "02-01-06 15:04:05",
+		"02-01-2006 15:04", "02-01-2006 15:04:05",
+		"02-01-06", "02-01-2006",
+		"02/01/06 15:04", "02/01/06 15:04:05",
+		"02/01/2006 15:04", "02/01/2006 15:04:05",
+		"02/01/06", "02/01/2006",
+		"2006-01-02T15:04:05", "2006-01-02T15:04",
+		"2006-01-02 15:04:05Z07:00", "2006-01-02T15:04:05Z07:00",
 	}
+
 	for _, format := range formats {
 		if date, err := time.ParseInLocation(format, value, time.Local); err == nil {
 			return date
 		}
+	}
+
+	// Fallback for strings that include only a date without time: keep the date but
+	// set the time to 00:00:00 instead of silently dropping the whole value.
+	if parsed, err := time.ParseInLocation("2006-01-02", value, time.Local); err == nil {
+		return parsed
+	}
+	if parsed, err := time.ParseInLocation("02.01.2006", value, time.Local); err == nil {
+		return parsed
+	}
+	if parsed, err := time.ParseInLocation("02.01.06", value, time.Local); err == nil {
+		return parsed
 	}
 
 	return time.Time{}

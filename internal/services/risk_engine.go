@@ -286,7 +286,7 @@ func collectA1(jobID uint) []models.DetectedRisk {
                 sc.min_age,
                 sc.max_age
             FROM service_records AS sr
-            JOIN service_classifiers AS sc ON sc.code = sr.service_code
+            JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         )
         SELECT
             clinic_name,
@@ -369,7 +369,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
             sr.service_date::date AS service_date,
             'Нарушение пола' AS reason
         FROM service_records AS sr
-        JOIN service_classifiers AS sc ON sc.code = sr.service_code
+        JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         WHERE sr.service_date IS NOT NULL
           AND BTRIM(sr.patient_gender) <> ''
           AND (
@@ -519,7 +519,7 @@ func collectA4(jobID uint) []models.DetectedRisk {
             MAX(sc.max_per_day) AS allowed_per_day,
             COALESCE(SUM(sr.amount), 0) AS total_amount
         FROM service_records AS sr
-        JOIN service_classifiers AS sc ON sc.code = sr.service_code
+        JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         WHERE BTRIM(COALESCE(sr.patient_iin, '')) <> ''
           AND BTRIM(COALESCE(sr.doctor_name, '')) <> ''
           AND sc.max_per_day > 0
@@ -587,7 +587,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
             MAX(sc.max_per_year) AS allowed_per_year,
             COALESCE(SUM(sr.amount), 0) AS total_amount
         FROM service_records AS sr
-        JOIN service_classifiers AS sc ON sc.code = sr.service_code
+        JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         WHERE sr.service_date IS NOT NULL
           AND sc.max_per_year > 0
         GROUP BY sr.doctor_name, sr.patient_iin, sr.service_code, EXTRACT(YEAR FROM sr.service_date)
@@ -660,7 +660,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
             (sc.tariff * GREATEST(sr.quantity, 1) * 1.2) AS allowed_amount,
             (sr.amount - (sc.tariff * GREATEST(sr.quantity, 1) * 1.2)) AS excess_amount
         FROM service_records AS sr
-        JOIN service_classifiers AS sc ON sc.code = sr.service_code
+        JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         WHERE sc.tariff > 0
           AND sr.amount > (sc.tariff * GREATEST(sr.quantity, 1) * 1.2)
         ORDER BY excess_amount DESC
@@ -731,7 +731,7 @@ func collectA10(jobID uint) []models.DetectedRisk {
                 LAG(sr.service_date) OVER physician_services AS previous_service_date,
                 LAG(sc.norm_minutes) OVER physician_services AS required_interval_minutes
             FROM service_records AS sr
-            JOIN service_classifiers AS sc ON sc.code = sr.service_code
+            JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
             WHERE sr.doctor_name <> ''
               AND BTRIM(COALESCE(sr.clinic_name, '')) <> ''
               AND sr.service_date::time <> TIME '00:00:00'

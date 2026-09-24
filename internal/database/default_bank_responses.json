@@ -1,0 +1,752 @@
+[
+  {
+    "id": 0,
+    "bin": "250140004600",
+    "company_name": "ТОО \"Арон Инвест\"",
+    "account_number": "KZ94601A98674965805",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 2518.68
+  },
+  {
+    "id": 0,
+    "bin": "250140009384",
+    "company_name": "ТОО \"Кумуш\"",
+    "account_number": "KZ94601A47723703450",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 40459062.29
+  },
+  {
+    "id": 0,
+    "bin": "250140017553",
+    "company_name": "ТОО \"Мерсери\"",
+    "account_number": "KZ94601A43126753514",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 7142366.77
+  },
+  {
+    "id": 0,
+    "bin": "250240002441",
+    "company_name": "ТОО \"Парвус\"",
+    "account_number": "KZ94601A24762099221",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 48673912.64
+  },
+  {
+    "id": 0,
+    "bin": "250240002360",
+    "company_name": "ТОО \"Солатэк\"",
+    "account_number": "KZ94601A26524699902",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 37332140.92
+  },
+  {
+    "id": 0,
+    "bin": "250240006294",
+    "company_name": "ТОО \"Euro-Asian Retail\"",
+    "account_number": "KZ94601A95673947550",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 28249834.98
+  },
+  {
+    "id": 0,
+    "bin": "250240008637",
+    "company_name": "ТОО \"Сежа 71\"",
+    "account_number": "KZ94601A46209119017",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 47343559.9
+  },
+  {
+    "id": 0,
+    "bin": "250240012348",
+    "company_name": "ТОО \"Тиз63\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250240017001",
+    "company_name": "ТОО \"KazakhTransOil\"",
+    "account_number": "KZ94601A23778349942",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 2500.95
+  },
+  {
+    "id": 0,
+    "bin": "250240023620",
+    "company_name": "ТОО \"РегЛайн\"",
+    "account_number": "KZ94601A71023300555",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 20965107.49
+  },
+  {
+    "id": 0,
+    "bin": "250240023393",
+    "company_name": "ТОО \"СПИРАЛЬ СЕРВИС\"",
+    "account_number": "KZ94601A92582556133",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 37484497.62
+  },
+  {
+    "id": 0,
+    "bin": "250240032342",
+    "company_name": "ТОО \"ТрансНова\"",
+    "account_number": "KZ94601A44867479254",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 34424533.4
+  },
+  {
+    "id": 0,
+    "bin": "250340001504",
+    "company_name": "ТОО \"МясОпт\"",
+    "account_number": "KZ94601A40023625364",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 2690
+  },
+  {
+    "id": 0,
+    "bin": "250340002136",
+    "company_name": "ТОО \"ZAUR GEO\"",
+    "account_number": "KZ94601A20296908068",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 38023597.2
+  },
+  {
+    "id": 0,
+    "bin": "250340008849",
+    "company_name": "ТОО \"NOVASERV\"",
+    "account_number": "KZ94601A84670139918",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 6673553.72
+  },
+  {
+    "id": 0,
+    "bin": "250340016196",
+    "company_name": "ТОО \"SilkWay Drive\"",
+    "account_number": "KZ94601A49090765964",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 33362713.23
+  },
+  {
+    "id": 0,
+    "bin": "250340018876",
+    "company_name": "ТОО \"Persist Kazakh K\u0026K\"",
+    "account_number": "KZ94601A91338629535",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 22985370.3
+  },
+  {
+    "id": 0,
+    "bin": "250440019719",
+    "company_name": "ТОО \"Байталло\"",
+    "account_number": "KZ94601A77840647549",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 35300295.61
+  },
+  {
+    "id": 0,
+    "bin": "250440024656",
+    "company_name": "ТОО \"Oil ChemTrade Limited\"",
+    "account_number": "KZ94601A82410028993",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 35883530.84
+  },
+  {
+    "id": 0,
+    "bin": "250540009021",
+    "company_name": "ТОО \"ПРОМЫШЛЕННОЕ И ГРАЖДАНСКОЕ СТРОИТЕЛЬСТВО КАЗАХСТАН\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250540011777",
+    "company_name": "ТОО \"Рустамли\"",
+    "account_number": "KZ94601A71279144067",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 27851452.12
+  },
+  {
+    "id": 0,
+    "bin": "250640011275",
+    "company_name": "ТОО \"Samurline\"",
+    "account_number": "KZ94601A61834657726",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 4302733.43
+  },
+  {
+    "id": 0,
+    "bin": "250640010742",
+    "company_name": "ТОО \"Vokal QZ\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250640019687",
+    "company_name": "ТОО \"Бэст Прибор\"",
+    "account_number": "KZ94601A92024539573",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 4665131.72
+  },
+  {
+    "id": 0,
+    "bin": "250640021153",
+    "company_name": "ТОО \"AI Factory\"",
+    "account_number": "KZ94601A18796282241",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 22460876.47
+  },
+  {
+    "id": 0,
+    "bin": "250640025542",
+    "company_name": "ТОО \"Midstream Energy Company\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250640028884",
+    "company_name": "ТОО \"Аксайские корма\"",
+    "account_number": "KZ94601A10930671026",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 57.48
+  },
+  {
+    "id": 0,
+    "bin": "250740000302",
+    "company_name": "ТОО \"Элит Карго\"",
+    "account_number": "KZ94601A26701275682",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 37844976.4
+  },
+  {
+    "id": 0,
+    "bin": "250740016478",
+    "company_name": "ТОО \"NatureGlow\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250740021286",
+    "company_name": "ТОО \"EFFEGI EURASIA\"",
+    "account_number": "KZ94601A64609573620",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 1229.09
+  },
+  {
+    "id": 0,
+    "bin": "250740023758",
+    "company_name": "ТОО \"INVITRUM (Инвитрум)\"",
+    "account_number": "KZ94601A26369350135",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 3692.65
+  },
+  {
+    "id": 0,
+    "bin": "250740027453",
+    "company_name": "ТОО \"Араш Жол\"",
+    "account_number": "KZ94601A97163640183",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 126.82
+  },
+  {
+    "id": 0,
+    "bin": "250840004864",
+    "company_name": "ТОО \"АV Consulting\"",
+    "account_number": "KZ94601A72909967543",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 19766895.25
+  },
+  {
+    "id": 0,
+    "bin": "250840018120",
+    "company_name": "ТОО \"Универсам ОПТ\"",
+    "account_number": "KZ94601A63856085143",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 37063147.77
+  },
+  {
+    "id": 0,
+    "bin": "250840020589",
+    "company_name": "ТОО \"Aminjon\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250840023960",
+    "company_name": "ТОО \"KOR Waste Management\"",
+    "account_number": "KZ94601A50933218049",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 28179571.12
+  },
+  {
+    "id": 0,
+    "bin": "250840024794",
+    "company_name": "ТОО \"Hermes Trading\"",
+    "account_number": "KZ94601A34814007045",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 2628.11
+  },
+  {
+    "id": 0,
+    "bin": "250840024968",
+    "company_name": "ТОО \"Zhaiyk Automation\"",
+    "account_number": "KZ94601A87186981358",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 9672672.33
+  },
+  {
+    "id": 0,
+    "bin": "250940010505",
+    "company_name": "ТОО \"Accord Staff\"",
+    "account_number": "KZ94601A58782934110",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 1236313.41
+  },
+  {
+    "id": 0,
+    "bin": "250940010684",
+    "company_name": "ТОО \"РестоАрт\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "250940010416",
+    "company_name": "ТОО \"Хавдан Плюс\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "251040002287",
+    "company_name": "ТОО \"Самарская мебель\"",
+    "account_number": "KZ94601A42127897819",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 4458.93
+  },
+  {
+    "id": 0,
+    "bin": "251040003770",
+    "company_name": "ТОО \"ЭкоПром Урал\"",
+    "account_number": "KZ94601A25123983010",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 29845509.65
+  },
+  {
+    "id": 0,
+    "bin": "251040006676",
+    "company_name": "ТОО \"DS-West Project\"",
+    "account_number": "KZ94601A97890454596",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 12253606.39
+  },
+  {
+    "id": 0,
+    "bin": "251040010575",
+    "company_name": "ТОО \"Цифровая Логистика KZ\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "251040020304",
+    "company_name": "ТОО \"Агросельхоз-Орал\"",
+    "account_number": "KZ94601A86475708350",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 35399266.65
+  },
+  {
+    "id": 0,
+    "bin": "251040022648",
+    "company_name": "ТОО \"Astana ARNA\"",
+    "account_number": "KZ94601A54310334614",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 14459478.22
+  },
+  {
+    "id": 0,
+    "bin": "251040033514",
+    "company_name": "ТОО \"Медуза Арт\"",
+    "account_number": "KZ94601A81559417065",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 1498693.17
+  },
+  {
+    "id": 0,
+    "bin": "251140002588",
+    "company_name": "ТОО \"ЖЕВОЛИ\"",
+    "account_number": "KZ94601A74696517912",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 37231965.94
+  },
+  {
+    "id": 0,
+    "bin": "251140020050",
+    "company_name": "ТОО \"AILINCOM\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "251140033548",
+    "company_name": "ТОО \"Eurasia PetroMach\"",
+    "account_number": "KZ94601A11515402792",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 2944.07
+  },
+  {
+    "id": 0,
+    "bin": "251240011392",
+    "company_name": "ТОО \"BD KZ\"",
+    "account_number": "KZ94601A29762606347",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 40300774.58
+  },
+  {
+    "id": 0,
+    "bin": "251240015286",
+    "company_name": "ТОО \"WINTA KZ\"",
+    "account_number": "KZ94601A74739851361",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 5076796.7
+  },
+  {
+    "id": 0,
+    "bin": "251240026638",
+    "company_name": "ТОО \"SmartPrep Labs\"",
+    "account_number": "KZ94601A22445076397",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 4330.85
+  },
+  {
+    "id": 0,
+    "bin": "260140006857",
+    "company_name": "ТОО \"MILYON SAMSA\"",
+    "account_number": "KZ94601A12224989915",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 19498050.38
+  },
+  {
+    "id": 0,
+    "bin": "260140013196",
+    "company_name": "ТОО \"МегаСтройКапитал\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260140015638",
+    "company_name": "ТОО \"ГРИН-Казахстан\"",
+    "account_number": "KZ94601A58380431825",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 31562361.53
+  },
+  {
+    "id": 0,
+    "bin": "260140020565",
+    "company_name": "ТОО \"Dima 07\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260140023916",
+    "company_name": "ТОО \"Interiorica\"",
+    "account_number": "KZ94601A51559451185",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 23254320.49
+  },
+  {
+    "id": 0,
+    "bin": "260140025437",
+    "company_name": "ТОО \"ALAI Holding\"",
+    "account_number": "KZ94601A26823677832",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 16574939.29
+  },
+  {
+    "id": 0,
+    "bin": "260140036125",
+    "company_name": "ТОО \"Эльшан07\"",
+    "account_number": "KZ94601A31451923085",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 10.11.2025",
+    "balance": 1356.49
+  },
+  {
+    "id": 0,
+    "bin": "260240002312",
+    "company_name": "ТОО \"Мастер Фуд Плюс\"",
+    "account_number": "KZ94601A41855458676",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 31010607.9
+  },
+  {
+    "id": 0,
+    "bin": "260240016739",
+    "company_name": "ТОО \"Кондраков\"",
+    "account_number": "KZ94601A74152269867",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 41008798.82
+  },
+  {
+    "id": 0,
+    "bin": "260340013103",
+    "company_name": "ТОО \"URX WORLD\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260340013044",
+    "company_name": "ТОО \"Строй Сет\"",
+    "account_number": "KZ94601A95489483121",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 27529277.18
+  },
+  {
+    "id": 0,
+    "bin": "260340023091",
+    "company_name": "ТОО \"Слимэликсирпептайд\"",
+    "account_number": "KZ94601A80970749270",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 21434681.25
+  },
+  {
+    "id": 0,
+    "bin": "260340032704",
+    "company_name": "ТОО \"Nomad box\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260340034909",
+    "company_name": "ТОО \"IKA Comerc\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260440006927",
+    "company_name": "ТОО \"UmbrellaX\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260440006769",
+    "company_name": "ТОО \"БАДАХШАН ОРАЛ ЖАЙЫК\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260440017338",
+    "company_name": "ТОО \"ОНИН Казахстан (ONIN Kazakhstan)\"",
+    "account_number": "KZ94601A98057291253",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 3568012.02
+  },
+  {
+    "id": 0,
+    "bin": "260440029480",
+    "company_name": "ТОО \"КЕЙЗЕДТАТМТ Шелковый путь Евразия\"",
+    "account_number": "KZ94601A79870897737",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 14650873.73
+  },
+  {
+    "id": 0,
+    "bin": "260440039228",
+    "company_name": "ТОО \"WEST LINE URALSK-07\"",
+    "account_number": "KZ94601A28589082313",
+    "currency": "KZT",
+    "account_type": "Текущий счет",
+    "status": "Открыт 15.01.2025",
+    "balance": 33869183.18
+  },
+  {
+    "id": 0,
+    "bin": "260440040491",
+    "company_name": "ТОО \"Гудзон\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  },
+  {
+    "id": 0,
+    "bin": "260540017699",
+    "company_name": "ТОО \"Server24 Cloud\"",
+    "account_number": "Отсутствует",
+    "currency": "",
+    "account_type": "",
+    "status": "Отсутствует",
+    "balance": 0
+  }
+]

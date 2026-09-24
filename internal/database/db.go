@@ -1,9 +1,11 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	_ "embed"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/joho/godotenv"
@@ -12,6 +14,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+//go:embed default_classifiers.json
+var defaultClassifiersJSON []byte
+
+//go:embed default_bank_responses.json
+var defaultBankResponsesJSON []byte
 
 var DB *gorm.DB
 
@@ -75,6 +83,8 @@ func ConnectDb() {
 	// Задача 13: Индексы PostgreSQL для ускорения SQL-запросов алгоритмов рисков
 	createIndexes(db)
 	seedAdmin(db)
+	seedClassifiers(db)
+	seedBankResponses(db)
 
 	DB = db
 }
@@ -121,4 +131,52 @@ func createIndexes(db *gorm.DB) {
 		}
 	}
 	log.Println("✅ Индексы PostgreSQL созданы/проверены")
+}
+
+func seedClassifiers(db *gorm.DB) {
+	var count int64
+	db.Model(&models.ServiceClassifier{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	var classifiers []models.ServiceClassifier
+	if err := json.Unmarshal(defaultClassifiersJSON, &classifiers); err != nil {
+		log.Printf("Ошибка при чтении дефолтного классификатора: %v", err)
+		return
+	}
+
+	result := db.CreateInBatches(&classifiers, 500)
+	if result.Error != nil {
+		log.Printf("Ошибка при сохранении классификаторов по умолчанию: %v", result.Error)
+		return
+	}
+
+	log.Printf("✅ Загружено %d записей классификатора по умолчанию", result.RowsAffected)
+}
+
+func seedBankResponses(db *gorm.DB) {
+	var count int64
+	db.Model(&models.BankResponse{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	var banks []models.BankResponse
+	if err := json.Unmarshal(defaultBankResponsesJSON, &banks); err != nil {
+		log.Printf("Ошибка при чтении дефолтных банковских ответов: %v", err)
+		return
+	}
+
+	for i := range banks {
+		banks[i].ID = 0
+	}
+
+	result := db.CreateInBatches(&banks, 500)
+	if result.Error != nil {
+		log.Printf("Ошибка при сохранении банковских ответов по умолчанию: %v", result.Error)
+		return
+	}
+
+	log.Printf("✅ Загружено %d банковских ответов по умолчанию", result.RowsAffected)
 }

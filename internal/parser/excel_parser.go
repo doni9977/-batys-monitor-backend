@@ -12,28 +12,46 @@ import (
 )
 
 func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
+	var records []models.ServiceRecord
+	err := ParseExcelBatched(filePath, 5000, func(batch []models.ServiceRecord) error {
+		records = append(records, batch...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// ParseExcelBatched reads TDSheet incrementally and passes each batch to onBatch.
+// It avoids keeping the complete workbook contents in memory.
+func ParseExcelBatched(filePath string, batchSize int, onBatch func([]models.ServiceRecord) error) error {
+	if batchSize < 1 {
+		return fmt.Errorf("размер батча должен быть положительным")
+	}
+
 	f, err := excelize.OpenFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка открытия файла: %v", err)
+		return fmt.Errorf("ошибка открытия файла: %v", err)
 	}
 	defer f.Close()
 
 	sheetName := "TDSheet"
 	rows, err := f.Rows(sheetName)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка получения строк листа: %v", err)
+		return fmt.Errorf("ошибка получения строк листа: %v", err)
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return nil, fmt.Errorf("файл пуст или не содержит данных")
+		return fmt.Errorf("файл пуст или не содержит данных")
 	}
 
 	// RawCellValue сохраняет серийный номер Excel для ячеек дат. Это позволяет
 	// корректно обработать даты независимо от формата отображения в книге.
 	headerRow, err := rows.Columns(excelize.Options{RawCellValue: true})
 	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения заголовка: %v", err)
+		return fmt.Errorf("ошибка чтения заголовка: %v", err)
 	}
 
 	// Храним заголовки в исходном порядке: map здесь давала случайный результат,
@@ -72,18 +90,19 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	diagIdx := findColIndex("мкб", "диагноз")
 	clinicIdx := findColIndex("поставщик", "организация", "клиника", "клиник")
 
-	var records []models.ServiceRecord
+	batch := make([]models.ServiceRecord, 0, batchSize)
+	totalRecords := 0
 
 	workbookProps, err := f.GetWorkbookProps()
 	if err != nil {
-		return nil, fmt.Errorf("ошибка чтения свойств книги: %v", err)
+		return fmt.Errorf("ошибка чтения свойств книги: %v", err)
 	}
 	use1904Dates := workbookProps.Date1904 != nil && *workbookProps.Date1904
 
 	for rows.Next() {
 		row, err := rows.Columns(excelize.Options{RawCellValue: true})
 		if err != nil {
-			return nil, fmt.Errorf("ошибка чтения строки Excel: %v", err)
+			return fmt.Errorf("ошибка чтения строки Excel: %v", err)
 		}
 
 		getValByIndex := func(idx int) string {
@@ -123,14 +142,26 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 			continue
 		}
 
-		records = append(records, record)
+		batch = append(batch, record)
+		totalRecords++
+		if len(batch) == batchSize {
+			if err := onBatch(batch); err != nil {
+				return err
+			}
+			batch = make([]models.ServiceRecord, 0, batchSize)
+		}
 	}
 	if err := rows.Error(); err != nil {
-		return nil, fmt.Errorf("ошибка чтения Excel: %v", err)
+		return fmt.Errorf("ошибка чтения Excel: %v", err)
+	}
+	if len(batch) > 0 {
+		if err := onBatch(batch); err != nil {
+			return err
+		}
 	}
 
-	log.Printf("Успешно распарсено %d записей из Excel файла.\n", len(records))
-	return records, nil
+	log.Printf("Успешно распарсено %d записей из Excel файла.\n", totalRecords)
+	return nil
 }
 
 // normalizeHeader makes matching resilient to case, non-breaking spaces and

@@ -55,25 +55,30 @@ func UploadExcel(c *fiber.Ctx) error {
 }
 
 func processUploadedExcel(jobID uint, fileName string, tempPath string) {
-	records, err := parser.ParseExcel(tempPath)
-	if err != nil {
-		failRiskJob(jobID, fmt.Errorf("ошибка парсинга Excel: %w", err))
-		return
-	}
-
+	database.DB.Model(&models.RiskJob{}).Where("id = ?", jobID).Updates(map[string]interface{}{
+		"status":     models.RiskJobStatusRunning,
+		"started_at": time.Now(),
+	})
 	if err := database.DB.Exec("TRUNCATE TABLE service_records RESTART IDENTITY;").Error; err != nil {
 		failRiskJob(jobID, fmt.Errorf("не удалось очистить старые данные: %w", err))
 		return
 	}
 
-	result := database.DB.CreateInBatches(&records, 1000)
-	if result.Error != nil {
-		failRiskJob(jobID, fmt.Errorf("ошибка сохранения в БД: %w", result.Error))
+	var loadedRecords int64
+	err := parser.ParseExcelBatched(tempPath, 5000, func(batch []models.ServiceRecord) error {
+		result := database.DB.CreateInBatches(&batch, 1000)
+		if result.Error != nil {
+			return fmt.Errorf("ошибка сохранения в БД: %w", result.Error)
+		}
+		loadedRecords += result.RowsAffected
+		return database.DB.Model(&models.RiskJob{}).Where("id = ?", jobID).Update("loaded_records", loadedRecords).Error
+	})
+	if err != nil {
+		failRiskJob(jobID, err)
 		return
 	}
 
-	database.DB.Model(&models.RiskJob{}).Where("id = ?", jobID).Update("loaded_records", result.RowsAffected)
-	log.Printf("Файл %s обработан: %d записей", fileName, result.RowsAffected)
+	log.Printf("Файл %s обработан: %d записей", fileName, loadedRecords)
 	services.RunAllRiskEngines(jobID)
 }
 

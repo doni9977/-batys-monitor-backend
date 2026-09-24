@@ -15,6 +15,7 @@ import (
 func ExportRisksXlsx(c *fiber.Ctx) error {
 	indicator := c.Query("indicator")
 	jobIDStr := c.Query("job_id")
+	domain := c.Query("domain")
 
 	var jobID uint64
 	if jobIDStr != "" {
@@ -24,7 +25,11 @@ func ExportRisksXlsx(c *fiber.Ctx) error {
 		}
 	} else {
 		var latest models.RiskJob
-		if err := database.DB.Where("status = ?", models.RiskJobStatusDone).Order("created_at DESC").First(&latest).Error; err == nil {
+		jobQuery := database.DB.Where("status = ?", models.RiskJobStatusDone)
+		if domain != "" {
+			jobQuery = jobQuery.Where("domain = ?", domain)
+		}
+		if err := jobQuery.Order("created_at DESC").First(&latest).Error; err == nil {
 			jobID = uint64(latest.ID)
 		}
 	}

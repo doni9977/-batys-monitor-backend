@@ -66,7 +66,7 @@ func ExportRisksToXLSX(c *fiber.Ctx) error {
 
 	// Стиль для даты
 	dateStyle, _ := f.NewStyle(&excelize.Style{
-		NumFmt: "yyyy-mm-dd",
+		CustomNumFmt: stringPtr("yyyy-mm-dd"),
 	})
 
 	// Заголовки колонок
@@ -83,7 +83,7 @@ func ExportRisksToXLSX(c *fiber.Ctx) error {
 
 	// Пишем заголовки
 	for col, header := range headers {
-		cell, _ := excelize.CoordinatesToCellID(col+1, 1)
+		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
 		f.SetCellValue("Sheet1", cell, header)
 		f.SetCellStyle("Sheet1", cell, cell, headerStyle)
 	}
@@ -115,7 +115,7 @@ func ExportRisksToXLSX(c *fiber.Ctx) error {
 		}
 
 		for col, value := range values {
-			cell, _ := excelize.CoordinatesToCellID(col+1, row)
+			cell, _ := excelize.CoordinatesToCellName(col+1, row)
 			f.SetCellValue("Sheet1", cell, value)
 
 			// Применяем стиль даты для колонки "Дата риска"
@@ -126,8 +126,8 @@ func ExportRisksToXLSX(c *fiber.Ctx) error {
 	}
 
 	// Устанавливаем фильтры
-	f.AutoFilter.Ref = "A1:H" + fmt.Sprintf("%d", len(risks)+1)
-	err = f.SetAutoFilter("Sheet1", "A1", fmt.Sprintf("H%d", len(risks)+1), "")
+	lastCell := fmt.Sprintf("H%d", len(risks)+1)
+	f.AutoFilter("Sheet1", "A1:"+lastCell, nil)
 
 	// Сохраняем в буфер
 	buf, err := f.WriteToBuffer()
@@ -143,4 +143,8 @@ func ExportRisksToXLSX(c *fiber.Ctx) error {
 	c.Response().Header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"risks_%s.xlsx\"", time.Now().Format("2006-01-02_15-04-05")))
 
 	return c.Send(buf.Bytes())
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

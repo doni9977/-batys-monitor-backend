@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
@@ -322,10 +321,10 @@ func collectA3(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
-		ClinicName   string
-		DoctorName   string
-		ServiceHour  time.Time
-		ServiceCount int
+		ClinicName    string
+		DoctorName    string
+		ServiceHour   time.Time
+		ServiceCount  int
 		ThresholdType string // "per_hour" или "per_day"
 	}
 
@@ -373,7 +372,7 @@ func collectA3(jobID uint) []models.DetectedRisk {
 		if r.ThresholdType == "per_day" {
 			threshold = 200
 		}
-		
+
 		details := map[string]interface{}{
 			"clinic_name":   r.ClinicName,
 			"doctor_name":   r.DoctorName,
@@ -570,6 +569,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
         JOIN service_classifiers AS sc ON sc.code = sr.service_code
         WHERE sc.tariff > 0
           AND sr.amount > sc.tariff * GREATEST(sr.quantity, 1) * 1.20
+    `).Scan(&rows).Error
 
 	if err != nil {
 		log.Printf("A8 query failed: %v", err)

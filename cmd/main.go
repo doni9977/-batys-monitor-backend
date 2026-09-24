@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/danialmarat/batys-monitor-backend/internal/auth"
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
 	"github.com/danialmarat/batys-monitor-backend/internal/handlers"
 	"github.com/gofiber/fiber/v2"
@@ -41,6 +42,13 @@ func main() {
 		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
 	}))
 
+	app.Use("/api", func(c *fiber.Ctx) error {
+		if c.Path() == "/api/health" || c.Path() == "/api/auth/login" {
+			return c.Next()
+		}
+		return auth.RequireJWT(c)
+	})
+
 	// Health check
 	app.Get("/api/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
@@ -49,6 +57,7 @@ func main() {
 			"version": "2.0.0",
 		})
 	})
+	app.Post("/api/auth/login", handlers.Login)
 
 	// Загрузка данных
 	app.Post("/api/upload", handlers.UploadExcel)
@@ -96,7 +105,6 @@ func main() {
 	// ── Домен: Нерезиденты (КГД) ──────────────────────────────────────────
 	// Загрузка реестра нерезидентов
 	app.Post("/api/upload-nr", handlers.UploadNonResidentExcel)
-	
 
 	// Риски нерезидентов по индикаторам
 	app.Get("/api/risks/nr1", handlers.GetNrRisks("NR1"))
@@ -107,7 +115,6 @@ func main() {
 
 	// Загрузка ответов БВУ (банков) для алгоритма NR5
 	app.Post("/api/upload-bank-responses", handlers.UploadBankResponses)
-
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {

@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// UploadClassifierExcel загружает Excel-файл классификатора услуг.
 func UploadClassifierExcel(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -17,18 +18,16 @@ func UploadClassifierExcel(c *fiber.Ctx) error {
 		})
 	}
 
-	// Сохраняем в ./tmp директорию для отслеживания и удаления (БАГ #9 FIX)
+	// Задача 8 (БАГ #9): сохраняем в ./tmp/, добавляем defer os.Remove()
 	os.MkdirAll("./tmp", os.ModePerm)
-	tempPath := filepath.Join("./tmp", file.Filename)
+	tempPath := filepath.Join("./tmp/", file.Filename)
 
 	if err := c.SaveFile(file, tempPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Не удалось сохранить временный файл",
 		})
 	}
-
-	// Гарантированно удаляем временный файл после обработки
-	defer os.Remove(tempPath)
+	defer os.Remove(tempPath) // Удаляем временный файл после обработки
 
 	classifiers, err := parser.ParseClassifierExcel(tempPath)
 	if err != nil {

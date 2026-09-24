@@ -1,15 +1,26 @@
 package handlers
 
-import (
-	"github.com/gofiber/fiber/v2"
-)
+import "github.com/gofiber/fiber/v2"
 
-// GetRiskA3 возвращает готовые записи из единой таблицы detected_risks.
 func GetRiskA3(c *fiber.Ctx) error {
-	risks, total, err := loadRisksByIndicator(c, "A3")
-	if err != nil {
-		return respondRiskLoadError(c, err, "Ошибка чтения рисков A3")
-	}
+	return buildRiskResponse(c, "A3", "Аномальная нагрузка врача")
+}
+func GetRiskS1(c *fiber.Ctx) error {
+	return buildRiskResponse(c, "S1", "Пересечение стационара и поликлиники")
+}
 
-	return respondRisksWithPagination(c, "A3", risks, total)
+func GetRiskS2(c *fiber.Ctx) error {
+	return buildRiskResponse(c, "S2", "Дробление госпитализаций")
+}
+
+func GetRiskS3(c *fiber.Ctx) error {
+	return buildRiskResponse(c, "S3", "Фиктивный круглосуточный стационар")
+}
+
+func GetRiskS4(c *fiber.Ctx) error {
+	return buildRiskResponse(c, "S4", "Аномалия экстренной госпитализации")
+}
+
+func GetRiskS5(c *fiber.Ctx) error {
+	return buildRiskResponse(c, "S5", "Услуги после смерти")
 }

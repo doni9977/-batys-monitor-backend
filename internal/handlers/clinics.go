@@ -6,91 +6,42 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// GetClinicsRisks возвращает список клиник с суммарным риск-баллом для карты (ЗАДАЧА 11)
-func GetClinicsRisks(c *fiber.Ctx) error {
-	type clinicRiskRow struct {
-		ClinicName     string
-		TotalRisks     int64
-		TotalAmount    float64
-		A1Count        int64
-		A2Count        int64
-		A3Count        int64
-		A4Count        int64
-		A7Count        int64
-		A8Count        int64
-		A10Count       int64
-		RiskScoreLevel string // "low", "medium", "high", "critical"
+// GetClinicRisks агрегирует количество нарушений по каждой поликлинике для отображения на карте
+func GetClinicRisks(c *fiber.Ctx) error {
+	type ClinicStat struct {
+		ClinicName string `json:"clinic_name"`
+		TotalRisks int64  `json:"total_risks"`
 	}
 
-	var rows []clinicRiskRow
+	var stats []ClinicStat
 
-	// Получаем последний успешный job
 	var latestDoneJob models.RiskJob
 	err := database.DB.
 		Where("status = ?", models.RiskJobStatusDone).
 		Order("created_at DESC").
 		First(&latestDoneJob).Error
+
 	if err != nil {
-		// Если успешных задач ещё не было, возвращаем пустой список
 		return c.JSON(fiber.Map{
-			"clinics": []fiber.Map{},
-			"job_id":  nil,
+			"clinics": []ClinicStat{},
 		})
 	}
 
-	// Подробный SQL для агрегации по клиникам
-	err = database.DB.Raw(`
-		SELECT
-			COALESCE(clinic_name, 'Неизвестная клиника') AS clinic_name,
-			COUNT(*) AS total_risks,
-			COALESCE(SUM(amount), 0) AS total_amount,
-			SUM(CASE WHEN indicator = 'A1' THEN 1 ELSE 0 END) AS a1_count,
-			SUM(CASE WHEN indicator = 'A2' THEN 1 ELSE 0 END) AS a2_count,
-			SUM(CASE WHEN indicator = 'A3' THEN 1 ELSE 0 END) AS a3_count,
-			SUM(CASE WHEN indicator = 'A4' THEN 1 ELSE 0 END) AS a4_count,
-			SUM(CASE WHEN indicator = 'A7' THEN 1 ELSE 0 END) AS a7_count,
-			SUM(CASE WHEN indicator = 'A8' THEN 1 ELSE 0 END) AS a8_count,
-			SUM(CASE WHEN indicator = 'A10' THEN 1 ELSE 0 END) AS a10_count,
-			CASE
-				WHEN COUNT(*) > 500 THEN 'critical'
-				WHEN COUNT(*) > 200 THEN 'high'
-				WHEN COUNT(*) > 50 THEN 'medium'
-				ELSE 'low'
-			END AS risk_score_level
-		FROM detected_risks
-		WHERE job_id = ?
-		GROUP BY clinic_name
-		ORDER BY total_risks DESC
-	`, latestDoneJob.ID).Scan(&rows).Error
+	err = database.DB.Model(&models.DetectedRisk{}).
+		Select("clinic_name, COUNT(id) as total_risks").
+		Where("job_id = ? AND clinic_name != ''", latestDoneJob.ID).
+		Group("clinic_name").
+		Order("total_risks DESC").
+		Scan(&stats).Error
 
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Ошибка чтения рисков по клиникам: " + err.Error(),
-		})
-	}
-
-	// Преобразуем результаты
-	clinics := make([]fiber.Map, 0, len(rows))
-	for _, row := range rows {
-		clinics = append(clinics, fiber.Map{
-			"clinic_name":  row.ClinicName,
-			"total_risks":  row.TotalRisks,
-			"total_amount": row.TotalAmount,
-			"risks_by_indicator": fiber.Map{
-				"A1":  row.A1Count,
-				"A2":  row.A2Count,
-				"A3":  row.A3Count,
-				"A4":  row.A4Count,
-				"A7":  row.A7Count,
-				"A8":  row.A8Count,
-				"A10": row.A10Count,
-			},
-			"risk_score_level": row.RiskScoreLevel,
+			"error": "Ошибка получения статистики по клиникам",
 		})
 	}
 
 	return c.JSON(fiber.Map{
 		"job_id":  latestDoneJob.ID,
-		"clinics": clinics,
+		"clinics": stats,
 	})
 }

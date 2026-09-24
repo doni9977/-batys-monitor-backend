@@ -11,6 +11,7 @@ type ServiceRecord struct {
 	ClinicName     string    `gorm:"index"` // "Поставщик" из Excel
 	DoctorName     string    `gorm:"index"` // "Врачи"
 	PatientIIN     string    `gorm:"index"` // "ИИНы" пациента
+	PatientName    string    `gorm:"index"` // "Пациенты" — имя (инициалы), для кросс-чека со стационаром
 	PatientGender  string    // "Пол" пациента
 	PatientDOB     string    // "Дата рождения" (оставляем строкой для простоты парсинга)
 	ServiceCode    string    `gorm:"index"` // "Код услуги"

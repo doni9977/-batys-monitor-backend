@@ -62,6 +62,7 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	dateIdx := findColIndex("период услуги", "дата услуги", "период", "дата")
 	doctorIdx := findColIndex("врач", "специалист")
 	iinIdx := findColIndex("иин", "инн")
+	patientNameIdx := findColIndex("пациенты")
 	genderIdx := findColIndex("пол")
 	dobIdx := findColIndex("рождения", "дата рожд")
 	codeIdx := findColIndex("код услуги", "код")
@@ -106,6 +107,7 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 			ClinicName:     normalizeName(getValByIndex(clinicIdx)),
 			DoctorName:     doctorName,
 			PatientIIN:     getValByIndex(iinIdx),
+			PatientName:    normalizeName(getValByIndex(patientNameIdx)),
 			PatientGender:  getValByIndex(genderIdx),
 			PatientDOB:     getValByIndex(dobIdx),
 			ServiceCode:    getValByIndex(codeIdx),

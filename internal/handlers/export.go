@@ -1,9 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
+	"strconv"
 	"time"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
@@ -12,139 +11,65 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// ExportRisksToXLSX экспортирует обнаруженные риски в Excel (ЗАДАЧА 12)
-func ExportRisksToXLSX(c *fiber.Ctx) error {
-	// Получаем последний успешный job
-	var latestDoneJob models.RiskJob
-	err := database.DB.
-		Where("status = ?", models.RiskJobStatusDone).
-		Order("created_at DESC").
-		First(&latestDoneJob).Error
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Нет завершённых задач расчёта рисков",
-		})
+// ExportRisksXlsx экспортирует результаты проверок (по конкретному алгоритму или все) в Excel
+func ExportRisksXlsx(c *fiber.Ctx) error {
+	indicator := c.Query("indicator")
+	jobIDStr := c.Query("job_id")
+
+	var jobID uint64
+	if jobIDStr != "" {
+		parsed, err := strconv.ParseUint(jobIDStr, 10, 64)
+		if err == nil {
+			jobID = parsed
+		}
+	} else {
+		var latest models.RiskJob
+		if err := database.DB.Where("status = ?", models.RiskJobStatusDone).Order("created_at DESC").First(&latest).Error; err == nil {
+			jobID = uint64(latest.ID)
+		}
 	}
 
-	// Получаем все риски для этого job
+	query := database.DB.Model(&models.DetectedRisk{}).Where("job_id = ?", jobID)
+	if indicator != "" {
+		query = query.Where("indicator = ?", indicator)
+	}
+
 	var risks []models.DetectedRisk
-	err = database.DB.Where("job_id = ?", latestDoneJob.ID).
-		Order("indicator, risk_date DESC").
-		Find(&risks).Error
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Ошибка чтения рисков: " + err.Error(),
-		})
+	if err := query.Order("clinic_name ASC, risk_date ASC").Find(&risks).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch risks for export"})
 	}
 
-	// Создаём новую Excel-книгу
 	f := excelize.NewFile()
 	defer f.Close()
 
-	// Стиль заголовков
-	headerStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{
-			Bold:  true,
-			Color: "#FFFFFF",
-		},
-		Fill: excelize.Fill{
-			Type:    "pattern",
-			Color:   []string{"#4472C4"},
-			Pattern: 1,
-		},
-		Alignment: &excelize.Alignment{
-			Horizontal: "center",
-			Vertical:   "center",
-		},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
+	sheet := "Risks"
+	f.SetSheetName("Sheet1", sheet)
 
-	// Стиль для даты
-	dateStyle, _ := f.NewStyle(&excelize.Style{
-		CustomNumFmt: stringPtr("yyyy-mm-dd"),
-	})
-
-	// Заголовки колонок
-	headers := []string{
-		"№",
-		"Индикатор",
-		"Клиника",
-		"Врач",
-		"ИИН пациента",
-		"Дата риска",
-		"Сумма",
-		"Детали",
+	// Заголовки
+	headers := []string{"Поликлиника", "Врач", "ИИН пациента", "Индикатор", "Дата риска", "Сумма ущерба (тг)"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
 	}
 
-	// Пишем заголовки
-	for col, header := range headers {
-		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
-		f.SetCellValue("Sheet1", cell, header)
-		f.SetCellStyle("Sheet1", cell, cell, headerStyle)
+	// Данные
+	for i, r := range risks {
+		row := i + 2
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), r.ClinicName)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), r.DoctorName)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), r.PatientIIN)
+		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), r.Indicator)
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), r.RiskDate.Format("02.01.2006"))
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), r.Amount)
 	}
 
-	// Устанавливаем ширину колонок
-	colWidths := []float64{5, 12, 20, 15, 15, 15, 12, 40}
-	for i, width := range colWidths {
-		f.SetColWidth("Sheet1", string(rune('A'+i)), string(rune('A'+i)), width)
-	}
+	// Стилизация (жирный заголовок)
+	style, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	f.SetRowStyle(sheet, 1, 1, style)
+	f.SetColWidth(sheet, "A", "F", 20)
 
-	// Пишем данные
-	for rowIdx, risk := range risks {
-		row := rowIdx + 2 // Начинаем со второй строки (первая - заголовки)
+	c.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=Risks_Export_%s.xlsx", time.Now().Format("2006-01-02_1504")))
 
-		// Детали (JSON)
-		var details map[string]interface{}
-		json.Unmarshal(risk.Details, &details)
-		detailsStr := fmt.Sprintf("%v", details)
-
-		values := []interface{}{
-			rowIdx + 1,
-			risk.Indicator,
-			risk.ClinicName,
-			risk.DoctorName,
-			risk.PatientIIN,
-			risk.RiskDate,
-			risk.Amount,
-			detailsStr,
-		}
-
-		for col, value := range values {
-			cell, _ := excelize.CoordinatesToCellName(col+1, row)
-			f.SetCellValue("Sheet1", cell, value)
-
-			// Применяем стиль даты для колонки "Дата риска"
-			if col == 5 {
-				f.SetCellStyle("Sheet1", cell, cell, dateStyle)
-			}
-		}
-	}
-
-	// Устанавливаем фильтры
-	lastCell := fmt.Sprintf("H%d", len(risks)+1)
-	f.AutoFilter("Sheet1", "A1:"+lastCell, nil)
-
-	// Сохраняем в буфер
-	buf, err := f.WriteToBuffer()
-	if err != nil {
-		log.Printf("Ошибка при сохранении Excel: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Ошибка генерации Excel файла: " + err.Error(),
-		})
-	}
-
-	// Отправляем файл клиенту
-	c.Response().Header.Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Response().Header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"risks_%s.xlsx\"", time.Now().Format("2006-01-02_15-04-05")))
-
-	return c.Send(buf.Bytes())
-}
-
-func stringPtr(s string) *string {
-	return &s
+	return f.Write(c.Response().BodyWriter())
 }

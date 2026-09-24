@@ -7,6 +7,7 @@ import (
 
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -56,6 +57,8 @@ func ConnectDb() {
 		&models.BerkutRecord{},
 		&models.InpatientRecord{},
 		&models.BankResponse{},
+		&models.Admin{},
+		&models.RevokedToken{},
 	)
 	if err != nil {
 		log.Fatal("Ошибка миграции: \n", err)
@@ -71,8 +74,30 @@ func ConnectDb() {
 
 	// Задача 13: Индексы PostgreSQL для ускорения SQL-запросов алгоритмов рисков
 	createIndexes(db)
+	seedAdmin(db)
 
 	DB = db
+}
+
+func seedAdmin(db *gorm.DB) {
+	username := getEnvOrDefault("ADMIN_USERNAME", "admin")
+	password := getEnvOrDefault("ADMIN_PASSWORD", "afm")
+
+	var admin models.Admin
+	if err := db.Where("username = ?", username).First(&admin).Error; err == nil {
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Предупреждение (создание администратора): %v", err)
+		return
+	}
+	if err := db.Create(&models.Admin{Username: username, PasswordHash: string(hash)}).Error; err != nil {
+		log.Printf("Предупреждение (сохранение администратора): %v", err)
+		return
+	}
+	log.Printf("✅ Администратор %q создан", username)
 }
 
 // createIndexes создаёт индексы для ускорения запросов Risk Engine.

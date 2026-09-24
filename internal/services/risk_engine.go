@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -11,9 +12,17 @@ import (
 	"gorm.io/datatypes"
 )
 
-func EnqueueRiskCalculationJob(sourceFile string, loadedRecords int64) (*models.RiskJob, error) {
+var (
+	ErrJobNotFound  = errors.New("job не найден")
+	ErrJobForbidden = errors.New("нет доступа к job")
+	ErrJobNotActive = errors.New("job уже завершён")
+	ErrJobCancelled = errors.New("job отменён")
+)
+
+func EnqueueRiskCalculationJob(username, sourceFile string, loadedRecords int64) (*models.RiskJob, error) {
 	job := &models.RiskJob{
 		Status:        models.RiskJobStatusQueued,
+		Username:      username,
 		SourceFile:    sourceFile,
 		LoadedRecords: loadedRecords,
 	}
@@ -32,6 +41,9 @@ func RunAllRiskEngines(jobID uint) {
 	}
 
 	if err := markJobRunning(jobID); err != nil {
+		if errors.Is(err, ErrJobCancelled) {
+			return
+		}
 		log.Printf("Не удалось перевести job=%d в running: %v", jobID, err)
 	}
 
@@ -47,15 +59,20 @@ func RunAllRiskEngines(jobID uint) {
 
 	risks := make([]models.DetectedRisk, 0, 5000)
 
-	risks = append(risks, collectA1(jobID)...)
-	risks = append(risks, collectA2(jobID)...)
-	risks = append(risks, collectA3(jobID)...)
-	risks = append(risks, collectA4(jobID)...)
-	risks = append(risks, collectA7(jobID)...)
-	risks = append(risks, collectA8(jobID)...)
-	risks = append(risks, collectA10(jobID)...)
+	collectors := []func(uint) []models.DetectedRisk{
+		collectA1, collectA2, collectA3, collectA4, collectA7, collectA8, collectA10,
+	}
+	for _, collect := range collectors {
+		if isJobCancelled(jobID) {
+			return
+		}
+		risks = append(risks, collect(jobID)...)
+	}
 
 	if len(risks) == 0 {
+		if isJobCancelled(jobID) {
+			return
+		}
 		log.Println("Нарушения не найдены")
 		if err := markJobDone(jobID, 0); err != nil {
 			log.Printf("Не удалось перевести job=%d в done: %v", jobID, err)
@@ -63,11 +80,18 @@ func RunAllRiskEngines(jobID uint) {
 		return
 	}
 
+	if isJobCancelled(jobID) {
+		return
+	}
 	if err := database.DB.CreateInBatches(risks, 500).Error; err != nil {
 		log.Printf("Ошибка сохранения обнаруженных рисков: %v", err)
 		if updateErr := markJobFailed(jobID, err); updateErr != nil {
 			log.Printf("Не удалось перевести job=%d в failed: %v", jobID, updateErr)
 		}
+		return
+	}
+	if isJobCancelled(jobID) {
+		deleteJobRisks(jobID)
 		return
 	}
 
@@ -84,14 +108,21 @@ func markJobRunning(jobID uint) error {
 	}
 
 	now := time.Now()
-	return database.DB.Model(&models.RiskJob{}).
-		Where("id = ?", jobID).
+	result := database.DB.Model(&models.RiskJob{}).
+		Where("id = ? AND status = ?", jobID, models.RiskJobStatusQueued).
 		Updates(map[string]interface{}{
 			"status":        models.RiskJobStatusRunning,
 			"started_at":    now,
 			"finished_at":   nil,
 			"error_message": "",
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 && isJobCancelled(jobID) {
+		return ErrJobCancelled
+	}
+	return nil
 }
 
 func markJobDone(jobID uint, risksFound int) error {
@@ -100,14 +131,21 @@ func markJobDone(jobID uint, risksFound int) error {
 	}
 
 	now := time.Now()
-	return database.DB.Model(&models.RiskJob{}).
-		Where("id = ?", jobID).
+	result := database.DB.Model(&models.RiskJob{}).
+		Where("id = ? AND status = ?", jobID, models.RiskJobStatusRunning).
 		Updates(map[string]interface{}{
 			"status":        models.RiskJobStatusDone,
 			"finished_at":   now,
 			"risks_found":   risksFound,
 			"error_message": "",
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 && isJobCancelled(jobID) {
+		deleteJobRisks(jobID)
+	}
+	return nil
 }
 
 func markJobFailed(jobID uint, cause error) error {
@@ -122,12 +160,68 @@ func markJobFailed(jobID uint, cause error) error {
 	}
 
 	return database.DB.Model(&models.RiskJob{}).
-		Where("id = ?", jobID).
+		Where("id = ? AND status IN ?", jobID, []string{models.RiskJobStatusQueued, models.RiskJobStatusRunning}).
 		Updates(map[string]interface{}{
 			"status":        models.RiskJobStatusFailed,
 			"finished_at":   now,
 			"error_message": errMessage,
 		}).Error
+}
+
+func isJobCancelled(jobID uint) bool {
+	if jobID == 0 {
+		return false
+	}
+	var job models.RiskJob
+	return database.DB.Select("status").First(&job, jobID).Error == nil && job.Status == models.RiskJobStatusCancelled
+}
+
+func deleteJobRisks(jobID uint) {
+	database.DB.Where("job_id = ?", jobID).Delete(&models.DetectedRisk{})
+}
+
+func CancelJob(jobID uint, username string) error {
+	var job models.RiskJob
+	if err := database.DB.First(&job, jobID).Error; err != nil {
+		return ErrJobNotFound
+	}
+	if job.Username != username {
+		return ErrJobForbidden
+	}
+	if job.Status != models.RiskJobStatusQueued && job.Status != models.RiskJobStatusRunning {
+		return ErrJobNotActive
+	}
+
+	result := database.DB.Model(&models.RiskJob{}).
+		Where("id = ? AND username = ? AND status IN ?", jobID, username,
+			[]string{models.RiskJobStatusQueued, models.RiskJobStatusRunning}).
+		Updates(map[string]interface{}{
+			"status":        models.RiskJobStatusCancelled,
+			"finished_at":   time.Now(),
+			"error_message": "Отменено пользователем",
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrJobNotActive
+	}
+	deleteJobRisks(jobID)
+	return nil
+}
+
+func CancelActiveJobs(username string) error {
+	var jobs []models.RiskJob
+	if err := database.DB.Where("username = ? AND status IN ?", username,
+		[]string{models.RiskJobStatusQueued, models.RiskJobStatusRunning}).Find(&jobs).Error; err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if err := CancelJob(job.ID, username); err != nil && !errors.Is(err, ErrJobNotActive) {
+			return err
+		}
+	}
+	return nil
 }
 
 func makeDetectedRisk(
@@ -321,12 +415,12 @@ func collectA3(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
-		ClinicName   string
-		DoctorName   string
-		ServiceDate  time.Time
-		ServiceHour  int
-		HourlyCount  int
-		DailyCount   int
+		ClinicName  string
+		DoctorName  string
+		ServiceDate time.Time
+		ServiceHour int
+		HourlyCount int
+		DailyCount  int
 	}
 
 	rows := []row{}
@@ -399,19 +493,19 @@ func collectA4(jobID uint) []models.DetectedRisk {
 	var results []models.DetectedRisk
 
 	type row struct {
-		ClinicName       string
-		DoctorName       string
-		PatientIIN       string
-		ServiceCode      string
-		ServiceName      string
-		RiskDate         time.Time
-		TotalCount       int
-		AllowedPerDay    int
-		TotalAmount      float64
+		ClinicName    string
+		DoctorName    string
+		PatientIIN    string
+		ServiceCode   string
+		ServiceName   string
+		RiskDate      time.Time
+		TotalCount    int
+		AllowedPerDay int
+		TotalAmount   float64
 	}
 
 	rows := []row{}
-	// Задача 4: Учет дневного лимита (max_per_day) пациента у одного врача, 
+	// Задача 4: Учет дневного лимита (max_per_day) пациента у одного врача,
 	// а не только кросс-клиничного дублирования
 	err := database.DB.Raw(`
         SELECT
@@ -440,14 +534,14 @@ func collectA4(jobID uint) []models.DetectedRisk {
 
 	for _, r := range rows {
 		details := map[string]interface{}{
-			"patient_iin":      r.PatientIIN,
-			"doctor_name":      r.DoctorName,
-			"service_code":     r.ServiceCode,
-			"service_name":     r.ServiceName,
-			"date":             r.RiskDate.Format("2006-01-02"),
-			"total_count":      r.TotalCount,
-			"allowed_per_day":  r.AllowedPerDay,
-			"total_amount":     r.TotalAmount,
+			"patient_iin":     r.PatientIIN,
+			"doctor_name":     r.DoctorName,
+			"service_code":    r.ServiceCode,
+			"service_name":    r.ServiceName,
+			"date":            r.RiskDate.Format("2006-01-02"),
+			"total_count":     r.TotalCount,
+			"allowed_per_day": r.AllowedPerDay,
+			"total_amount":    r.TotalAmount,
 		}
 
 		results = append(results, makeDetectedRisk(

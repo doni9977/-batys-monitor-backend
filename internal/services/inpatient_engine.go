@@ -17,6 +17,9 @@ func RunInpatientEngine(jobID uint) {
 	}
 
 	if err := markJobRunning(jobID); err != nil {
+		if err == ErrJobCancelled {
+			return
+		}
 		log.Printf("Не удалось перевести job=%d в running: %v", jobID, err)
 	}
 
@@ -39,13 +42,18 @@ func RunInpatientEngine(jobID uint) {
 
 	risks := make([]models.DetectedRisk, 0, 1000)
 
-	risks = append(risks, collectS3(jobID)...)
-	risks = append(risks, collectS2(jobID)...)
-	risks = append(risks, collectS4(jobID)...)
-	risks = append(risks, collectS1(jobID)...)
-	risks = append(risks, collectS5(jobID)...)
+	collectors := []func(uint) []models.DetectedRisk{collectS3, collectS2, collectS4, collectS1, collectS5}
+	for _, collect := range collectors {
+		if isJobCancelled(jobID) {
+			return
+		}
+		risks = append(risks, collect(jobID)...)
+	}
 
 	if len(risks) == 0 {
+		if isJobCancelled(jobID) {
+			return
+		}
 		log.Println("Стационар: риски не найдены")
 		if err := markJobDone(jobID, 0); err != nil {
 			log.Printf("Не удалось перевести job=%d в done: %v", jobID, err)
@@ -53,11 +61,18 @@ func RunInpatientEngine(jobID uint) {
 		return
 	}
 
+	if isJobCancelled(jobID) {
+		return
+	}
 	if err := database.DB.CreateInBatches(risks, 500).Error; err != nil {
 		log.Printf("Ошибка сохранения рисков стационара: %v", err)
 		if updateErr := markJobFailed(jobID, err); updateErr != nil {
 			log.Printf("Не удалось перевести job=%d в failed: %v", jobID, updateErr)
 		}
+		return
+	}
+	if isJobCancelled(jobID) {
+		deleteJobRisks(jobID)
 		return
 	}
 

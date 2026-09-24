@@ -4,32 +4,48 @@ import (
 	"log"
 	"time"
 
+	"encoding/json"
+
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"gorm.io/datatypes"
-	"encoding/json"
 )
 
 // RunAllNrRiskEngines запускает все NR-алгоритмы для указанного job.
 func RunAllNrRiskEngines(jobID uint) {
 	log.Printf("[NR Engine] Запуск алгоритмов NR1-NR5 для job_id=%d", jobID)
+	if err := markJobRunning(jobID); err != nil {
+		if err == ErrJobCancelled {
+			return
+		}
+		log.Printf("[NR Engine] Не удалось перевести job=%d в running: %v", jobID, err)
+	}
+	if isJobCancelled(jobID) {
+		return
+	}
 
 	// Очищаем старые NR-риски для этого job
 	database.DB.Where("job_id = ? AND indicator LIKE 'NR%'", jobID).
 		Delete(&models.DetectedRisk{})
 
 	var allRisks []models.DetectedRisk
-	allRisks = append(allRisks, collectNR1(jobID)...)
-	allRisks = append(allRisks, collectNR2(jobID)...)
-	allRisks = append(allRisks, collectNR3(jobID)...)
-	allRisks = append(allRisks, collectNR4(jobID)...)
-	allRisks = append(allRisks, collectNR5(jobID)...)
+	collectors := []func(uint) []models.DetectedRisk{collectNR1, collectNR2, collectNR3, collectNR4, collectNR5}
+	for _, collect := range collectors {
+		if isJobCancelled(jobID) {
+			return
+		}
+		allRisks = append(allRisks, collect(jobID)...)
+	}
 
-	if len(allRisks) > 0 {
+	if !isJobCancelled(jobID) && len(allRisks) > 0 {
 		res := database.DB.CreateInBatches(&allRisks, 500)
 		if res.Error != nil {
 			log.Printf("[NR Engine] Ошибка сохранения рисков: %v", res.Error)
 		}
+	}
+	if isJobCancelled(jobID) {
+		deleteJobRisks(jobID)
+		return
 	}
 
 	// Обновляем счётчик в job
@@ -171,17 +187,17 @@ func collectNR2(jobID uint) []models.DetectedRisk {
 			}
 
 			details := map[string]interface{}{
-				"company_name":     nr.FullName,
-				"bin":              nr.BIN,
-				"director_name":    b.DirectorName,
-				"director_iin":     b.DirectorIIN,
-				"vehicle_plate":    b.VehiclePlate,
-				"entry_date":       b.EntryDate.Format("2006-01-02"),
-				"exit_date":        b.ExitDate.Format("2006-01-02"),
-				"stay_days":        stayDays,
+				"company_name":       nr.FullName,
+				"bin":                nr.BIN,
+				"director_name":      b.DirectorName,
+				"director_iin":       b.DirectorIIN,
+				"vehicle_plate":      b.VehiclePlate,
+				"entry_date":         b.EntryDate.Format("2006-01-02"),
+				"exit_date":          b.ExitDate.Format("2006-01-02"),
+				"stay_days":          stayDays,
 				"shared_plate_count": grp.Count,
-				"crossing_point":   b.CrossingPoint,
-				"reason":           "Короткий визит (≤3 дней) + ГРНЗ использовало 3+ нерезидентов",
+				"crossing_point":     b.CrossingPoint,
+				"reason":             "Короткий визит (≤3 дней) + ГРНЗ использовало 3+ нерезидентов",
 			}
 			results = append(results, makeNrRisk(
 				jobID, "NR2",
@@ -222,16 +238,16 @@ func collectNR3(jobID uint) []models.DetectedRisk {
 
 		for _, nr := range nrRecords {
 			details := map[string]interface{}{
-				"company_name":    nr.FullName,
-				"bin":             nr.BIN,
-				"director_name":   nr.DirectorName,
-				"director_iin":    nr.DirectorIIN,
-				"notary":          nr.Notary,
-				"translator":      nr.Translator,
-				"pair_count":      pair.Count,
-				"reg_date":        nr.RegDate.Format("2006-01-02"),
-				"legal_address":   nr.LegalAddress,
-				"reason":          "Устойчивая сеть посредников: нотариус и переводчик зарегистрировали более 3 компаний нерезидентов",
+				"company_name":  nr.FullName,
+				"bin":           nr.BIN,
+				"director_name": nr.DirectorName,
+				"director_iin":  nr.DirectorIIN,
+				"notary":        nr.Notary,
+				"translator":    nr.Translator,
+				"pair_count":    pair.Count,
+				"reg_date":      nr.RegDate.Format("2006-01-02"),
+				"legal_address": nr.LegalAddress,
+				"reason":        "Устойчивая сеть посредников: нотариус и переводчик зарегистрировали более 3 компаний нерезидентов",
 			}
 			results = append(results, makeNrRisk(
 				jobID, "NR3",
@@ -289,12 +305,12 @@ func collectNR5(jobID uint) []models.DetectedRisk {
 
 	// --- Красный флаг: счёт отсутствует ---
 	type noAccountRow struct {
-		BIN              string
-		CompanyName      string
-		AccountStatus    string
+		BIN               string
+		CompanyName       string
+		AccountStatus     string
 		AuthorizedCapital float64
-		RegDate          time.Time
-		DirectorName     string
+		RegDate           time.Time
+		DirectorName      string
 	}
 
 	var noAccountRows []noAccountRow
@@ -314,13 +330,13 @@ func collectNR5(jobID uint) []models.DetectedRisk {
 
 	for _, r := range noAccountRows {
 		details := map[string]interface{}{
-			"bin":              r.BIN,
-			"company_name":     r.CompanyName,
-			"director_name":    r.DirectorName,
-			"account_status":   r.AccountStatus,
-			"balance":          0,
+			"bin":                r.BIN,
+			"company_name":       r.CompanyName,
+			"director_name":      r.DirectorName,
+			"account_status":     r.AccountStatus,
+			"balance":            0,
 			"authorized_capital": r.AuthorizedCapital,
-			"reason":           "Банковский счёт отсутствует — компания не ведёт реальной деятельности",
+			"reason":             "Банковский счёт отсутствует — компания не ведёт реальной деятельности",
 		}
 
 		riskDate := r.RegDate
@@ -337,13 +353,13 @@ func collectNR5(jobID uint) []models.DetectedRisk {
 
 	// --- Жёлтый флаг: счёт открыт, но баланс подозрительно низкий ---
 	type lowBalanceRow struct {
-		BIN              string
-		CompanyName      string
-		AccountStatus    string
-		Balance          float64
+		BIN               string
+		CompanyName       string
+		AccountStatus     string
+		Balance           float64
 		AuthorizedCapital float64
-		RegDate          time.Time
-		DirectorName     string
+		RegDate           time.Time
+		DirectorName      string
 	}
 
 	var lowBalanceRows []lowBalanceRow
@@ -364,13 +380,13 @@ func collectNR5(jobID uint) []models.DetectedRisk {
 
 	for _, r := range lowBalanceRows {
 		details := map[string]interface{}{
-			"bin":              r.BIN,
-			"company_name":     r.CompanyName,
-			"director_name":    r.DirectorName,
-			"account_status":   r.AccountStatus,
-			"balance":          r.Balance,
+			"bin":                r.BIN,
+			"company_name":       r.CompanyName,
+			"director_name":      r.DirectorName,
+			"account_status":     r.AccountStatus,
+			"balance":            r.Balance,
 			"authorized_capital": r.AuthorizedCapital,
-			"reason":           "Подозрительно низкий баланс на счёте (менее 10 000 ₸) — признаки компании-однодневки",
+			"reason":             "Подозрительно низкий баланс на счёте (менее 10 000 ₸) — признаки компании-однодневки",
 		}
 
 		riskDate := r.RegDate

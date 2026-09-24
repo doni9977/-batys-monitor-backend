@@ -62,7 +62,8 @@ func UploadExcel(c *fiber.Ctx) error {
 
 	log.Printf("✅ Сохранено %d записей в БД. Запускаем Risk Engine...", result.RowsAffected)
 
-	job, err := services.EnqueueRiskCalculationJob(file.Filename, result.RowsAffected)
+	username, _ := c.Locals("admin_username").(string)
+	job, err := services.EnqueueRiskCalculationJob(username, file.Filename, result.RowsAffected)
 	if err != nil {
 		log.Printf("Не удалось создать job трекинга: %v", err)
 	}
@@ -81,9 +82,9 @@ func UploadExcel(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"status":        "success",
-		"message":       fmt.Sprintf("Файл '%s' обработан! Загружено %d записей.", file.Filename, result.RowsAffected),
+		"status":         "success",
+		"message":        fmt.Sprintf("Файл '%s' обработан! Загружено %d записей.", file.Filename, result.RowsAffected),
 		"loaded_records": result.RowsAffected,
-		"risk_job_id":   riskJobID,
+		"risk_job_id":    riskJobID,
 	})
 }

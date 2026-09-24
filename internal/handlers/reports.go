@@ -13,7 +13,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// GenerateReportDocx генерирует отчет Word через Python скрипт по конкретному индикатору (алгоритму)
 func GenerateReportDocx(c *fiber.Ctx) error {
 	indicatorRaw := c.Query("indicator")
 	if indicatorRaw == "" {
@@ -22,11 +21,9 @@ func GenerateReportDocx(c *fiber.Ctx) error {
 	
 	indicator := strings.ToUpper(indicatorRaw)
 
-	// Find the latest job_id for this indicator
 	var latestRisk models.DetectedRisk
 	database.DB.Where("indicator = ?", indicator).Order("created_at DESC").First(&latestRisk)
 
-	// Fetch risks only for the latest job
 	var risks []models.DetectedRisk
 	query := database.DB.Where("indicator = ?", indicator)
 	if latestRisk.JobID != 0 {
@@ -37,7 +34,6 @@ func GenerateReportDocx(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch risks"})
 	}
 
-	// Calculate totals
 	var totalAmount float64
 	for _, r := range risks {
 		totalAmount += r.Amount
@@ -50,13 +46,11 @@ func GenerateReportDocx(c *fiber.Ctx) error {
 		"risks":        risks,
 	}
 
-	// Кодируем JSON
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to marshal JSON"})
 	}
 
-	// Вызываем Python скрипт
 	pythonBin := "../venv/bin/python" 
 	if _, err := os.Stat(pythonBin); os.IsNotExist(err) {
 		pythonBin = "python3" 

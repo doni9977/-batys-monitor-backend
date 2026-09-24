@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
+	"math/rand"
+
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/danialmarat/batys-monitor-backend/internal/parser"
 	"github.com/danialmarat/batys-monitor-backend/internal/services"
 	"github.com/gofiber/fiber/v2"
-	"math/rand"
 )
 
 // UploadNonResidentExcel принимает Excel-файл реестра нерезидентов,
@@ -59,13 +60,12 @@ func UploadNonResidentExcel(c *fiber.Ctx) error {
 	database.DB.Exec("DELETE FROM risk_jobs WHERE domain = 'nr'")
 
 	// Создаём job
-	now := time.Now()
 	job := &models.RiskJob{
-		Status:        models.RiskJobStatusRunning,
+		Status:        models.RiskJobStatusQueued,
+		Username:      c.Locals("admin_username").(string),
 		Domain:        "nr",
 		SourceFile:    file.Filename,
 		LoadedRecords: int64(len(records)),
-		StartedAt:     &now,
 	}
 	database.DB.Create(job)
 

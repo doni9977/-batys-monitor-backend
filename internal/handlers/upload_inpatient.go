@@ -8,7 +8,7 @@ import (
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/danialmarat/batys-monitor-backend/internal/parser"
-	"github.com/danialmarat/batys-monitor-backend/internal/services" 
+	"github.com/danialmarat/batys-monitor-backend/internal/services"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -91,6 +91,7 @@ func UploadInpatientExcel(c *fiber.Ctx) error {
 	//    пометились как стационарные (а не osms по умолчанию).
 	job := &models.RiskJob{
 		Status:        models.RiskJobStatusQueued,
+		Username:      c.Locals("admin_username").(string),
 		Domain:        "inpatient",
 		SourceFile:    fmt.Sprintf("Стационар: %d файл(ов)", len(fileNames)),
 		LoadedRecords: result.RowsAffected,
@@ -102,7 +103,7 @@ func UploadInpatientExcel(c *fiber.Ctx) error {
 	// 6. Запуск движка — ВРЕМЕННО ОТКЛЮЧЁН: services.RunInpatientEngine ещё не написан.
 	//    Раскомментируем этот блок (и импорт "services" выше), когда сделаем движок.
 	//
-		go func() {
+	go func() {
 		jobID := uint(0)
 		if job != nil {
 			jobID = job.ID

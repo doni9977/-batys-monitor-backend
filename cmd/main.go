@@ -26,7 +26,7 @@ func main() {
 	// CORS middleware - должен быть ДО регистрации роутов
 	corsOrigins := os.Getenv("CORS_ORIGINS")
 	if corsOrigins == "" {
-		corsOrigins = "http://localhost:3001,http://localhost:3002,http://localhost:5173"
+		corsOrigins = "*"
 	}
 
 	app.Use(cors.New(cors.Config{

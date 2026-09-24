@@ -14,8 +14,10 @@ FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata python3 py3-pip \
+    && pip3 install --break-system-packages python-docx
 
 COPY --from=builder /app/batys-monitor .
+COPY --from=builder /app/scripts ./scripts
 
 CMD ["sh", "-c", "SERVER_PORT=${PORT:-3000} ./batys-monitor"]

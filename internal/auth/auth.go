@@ -81,11 +81,16 @@ func RequireJWT(c *fiber.Ctx) error {
 	}
 
 	header := c.Get(fiber.HeaderAuthorization)
-	if !strings.HasPrefix(header, "Bearer ") {
+	var tokenString string
+
+	if strings.HasPrefix(header, "Bearer ") {
+		tokenString = strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+	} else if c.Query("token") != "" {
+		tokenString = c.Query("token")
+	} else {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Требуется авторизация"})
 	}
 
-	tokenString := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 	claims := &Claims{}
 	token, err := parseToken(tokenString, claims)
 	if err != nil || !token.Valid || claims.ID == "" {

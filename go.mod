@@ -1,6 +1,6 @@
 module github.com/danialmarat/batys-monitor-backend
 
-go 1.26.0
+go 1.25.5
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.15

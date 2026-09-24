@@ -20,6 +20,7 @@ import (
 
 var reFIO = regexp.MustCompile(`^([А-ЯЁа-яёA-Za-z\s\-]+),\s*[А-ЯЁа-яёA-Za-z]+,\s*паспорт`)
 var reIIN = regexp.MustCompile(`ИИН\s+(\d{12})`)
+var reBIN = regexp.MustCompile(`\d{12}`)
 
 func extractDirectorName(raw string) string {
 	raw = strings.TrimSpace(raw)
@@ -48,6 +49,13 @@ func extractIIN(raw string) string {
 	return ""
 }
 
+func extractBIN(raw string) string {
+	if match := reBIN.FindString(raw); match != "" {
+		return match
+	}
+	return ""
+}
+
 func extractCountry(raw string) string {
 	// Pattern: "..., Россия, паспорт ..."
 	countries := []string{"Россия", "Казахстан", "Узбекистан", "Таджикистан", "Туркменистан",
@@ -69,7 +77,7 @@ func parseFlexibleDate(s string) time.Time {
 	if serial, err := strconv.ParseFloat(s, 64); err == nil && serial > 10000 && serial < 100000 {
 		return time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC).AddDate(0, 0, int(serial))
 	}
-	
+
 	formats := []string{
 		"2006-01-02",
 		"02.01.2006",
@@ -140,11 +148,15 @@ func ParseNrExcel(filePath string) ([]models.NrRecord, error) {
 	}
 
 	getCol := func(row []string, key string) string {
-		idx, ok := colIdx[key]
-		if !ok || idx >= len(row) {
-			return ""
+		if idx, ok := colIdx[key]; ok && idx < len(row) {
+			return strings.TrimSpace(row[idx])
 		}
-		return strings.TrimSpace(row[idx])
+		for header, idx := range colIdx {
+			if strings.Contains(header, key) && idx < len(row) {
+				return strings.TrimSpace(row[idx])
+			}
+		}
+		return ""
 	}
 
 	var records []models.NrRecord
@@ -154,11 +166,11 @@ func ParseNrExcel(filePath string) ([]models.NrRecord, error) {
 			continue
 		}
 
-		bin := strings.TrimSpace(getCol(row, "бин"))
+		bin := extractBIN(getCol(row, "бин"))
 		if bin == "" {
 			// Попробовать взять числовое значение из колонки 2 (индекс 2)
 			if len(row) > 2 {
-				bin = strings.TrimSpace(row[2])
+				bin = extractBIN(row[2])
 			}
 		}
 		if bin == "" {

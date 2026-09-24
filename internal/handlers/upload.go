@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
+	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/danialmarat/batys-monitor-backend/internal/parser"
 	"github.com/danialmarat/batys-monitor-backend/internal/services"
 	"github.com/gofiber/fiber/v2"
@@ -23,74 +26,62 @@ func UploadExcel(c *fiber.Ctx) error {
 
 	log.Printf("📥 Получен файл: %s, Размер: %.2f МБ", file.Filename, float64(file.Size)/1024/1024)
 
-	os.MkdirAll("./tmp", os.ModePerm)
-	tempPath := fmt.Sprintf("./tmp/%s", file.Filename)
+	if err := os.MkdirAll("./tmp", os.ModePerm); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Не удалось создать временную папку"})
+	}
+	tempPath := filepath.Join("./tmp", filepath.Base(file.Filename))
 
 	if err := c.SaveFile(file, tempPath); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Не удалось сохранить файл на сервере",
 		})
 	}
-	defer os.Remove(tempPath)
+	job, err := services.EnqueueRiskCalculationJob(file.Filename, 0)
+	if err != nil {
+		_ = os.Remove(tempPath)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Не удалось создать задачу обработки"})
+	}
 
+	go func() {
+		defer os.Remove(tempPath)
+		processUploadedExcel(job.ID, file.Filename, tempPath)
+	}()
+
+	return c.JSON(fiber.Map{
+		"status":      "success",
+		"message":     fmt.Sprintf("Файл '%s' принят в обработку.", file.Filename),
+		"risk_job_id": job.ID,
+	})
+}
+
+func processUploadedExcel(jobID uint, fileName string, tempPath string) {
 	records, err := parser.ParseExcel(tempPath)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Ошибка парсинга Excel: %v", err),
-		})
+		failRiskJob(jobID, fmt.Errorf("ошибка парсинга Excel: %w", err))
+		return
 	}
 
-	log.Printf("✅ Распарсено %d записей. Очищаем старые данные...", len(records))
-
-	// Задача 3 (БАГ #1): TRUNCATE перед загрузкой новых данных.
-	// Без этого при повторной загрузке данные дублируются и все счётчики рисков
-	// растут вдвое, втрое и т.д.
 	if err := database.DB.Exec("TRUNCATE TABLE service_records RESTART IDENTITY;").Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Не удалось очистить старые данные перед загрузкой: " + err.Error(),
-		})
-	}
-	log.Println("🗑️  Старые данные удалены. Начинаем загрузку в PostgreSQL...")
-
-	// Очищаем таблицу перед новой загрузкой (БАГ #1 FIX)
-	if err := database.DB.Exec("TRUNCATE TABLE service_records RESTART IDENTITY;").Error; err != nil {
-		log.Printf("Предупреждение: не удалось очистить таблицу service_records: %v", err)
-	} else {
-		log.Println("Таблица service_records очищена.")
+		failRiskJob(jobID, fmt.Errorf("не удалось очистить старые данные: %w", err))
+		return
 	}
 
 	result := database.DB.CreateInBatches(&records, 1000)
 	if result.Error != nil {
-		log.Printf("Ошибка при сохранении в БД: %v", result.Error)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Ошибка сохранения в БД: %v", result.Error),
-		})
+		failRiskJob(jobID, fmt.Errorf("ошибка сохранения в БД: %w", result.Error))
+		return
 	}
 
-	log.Printf("✅ Сохранено %d записей в БД. Запускаем Risk Engine...", result.RowsAffected)
+	database.DB.Model(&models.RiskJob{}).Where("id = ?", jobID).Update("loaded_records", result.RowsAffected)
+	log.Printf("Файл %s обработан: %d записей", fileName, result.RowsAffected)
+	services.RunAllRiskEngines(jobID)
+}
 
-	job, err := services.EnqueueRiskCalculationJob(file.Filename, result.RowsAffected)
-	if err != nil {
-		log.Printf("Не удалось создать job трекинга: %v", err)
-	}
-
-	go func() {
-		jobID := uint(0)
-		if job != nil {
-			jobID = job.ID
-		}
-		services.RunAllRiskEngines(jobID)
-	}()
-
-	var riskJobID interface{}
-	if job != nil {
-		riskJobID = job.ID
-	}
-
-	return c.JSON(fiber.Map{
-		"status":        "success",
-		"message":       fmt.Sprintf("Файл '%s' обработан! Загружено %d записей.", file.Filename, result.RowsAffected),
-		"loaded_records": result.RowsAffected,
-		"risk_job_id":   riskJobID,
+func failRiskJob(jobID uint, cause error) {
+	log.Printf("Ошибка обработки job=%d: %v", jobID, cause)
+	database.DB.Model(&models.RiskJob{}).Where("id = ?", jobID).Updates(map[string]interface{}{
+		"status":        models.RiskJobStatusFailed,
+		"finished_at":   time.Now(),
+		"error_message": cause.Error(),
 	})
 }

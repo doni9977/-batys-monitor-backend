@@ -294,6 +294,8 @@ func collectA1(jobID uint) []models.DetectedRisk {
             clinic_name,
             doctor_name,
             patient_iin,
+
+            patient_name,
             patient_gender,
             service_date::date AS service_date,
             service_code,
@@ -389,6 +391,8 @@ func collectA2(jobID uint) []models.DetectedRisk {
             clinic_name,
             doctor_name,
             patient_iin,
+
+            patient_name,
             patient_gender,
             EXTRACT(YEAR FROM AGE(service_date, dob))::int AS patient_age,
             service_code,

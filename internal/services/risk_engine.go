@@ -255,6 +255,7 @@ func collectA1(jobID uint) []models.DetectedRisk {
 		ClinicName    string
 		DoctorName    string
 		PatientIIN    string
+		PatientName    string
 		PatientGender string
 		ServiceDate   time.Time
 		ServiceCode   string
@@ -272,6 +273,7 @@ func collectA1(jobID uint) []models.DetectedRisk {
                 sr.clinic_name,
                 sr.doctor_name,
                 sr.patient_iin,
+            sr.patient_name,
                 sr.patient_gender,
                 sr.service_date,
                 sr.service_code,
@@ -320,6 +322,7 @@ func collectA1(jobID uint) []models.DetectedRisk {
 			"clinic_name":    r.ClinicName,
 			"doctor_name":    r.DoctorName,
 			"patient_iin":    r.PatientIIN,
+			"patient_name":      r.PatientName,
 			"patient_gender": r.PatientGender,
 			"patient_age":    r.PatientAge,
 			"service_code":   r.ServiceCode,
@@ -350,6 +353,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
 		ClinicName    string
 		DoctorName    string
 		PatientIIN    string
+		PatientName    string
 		PatientGender string
 		PatientAge    int
 		ServiceCode   string
@@ -365,6 +369,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
                 sr.clinic_name,
                 sr.doctor_name,
                 sr.patient_iin,
+            sr.patient_name,
                 sr.patient_gender,
                 sr.service_code,
                 sr.service_name,
@@ -410,6 +415,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
 			"clinic_name":    r.ClinicName,
 			"doctor_name":    r.DoctorName,
 			"patient_iin":    r.PatientIIN,
+			"patient_name":      r.PatientName,
 			"patient_gender": r.PatientGender,
 			"patient_age":    r.PatientAge,
 			"service_code":   r.ServiceCode,
@@ -518,6 +524,7 @@ func collectA4(jobID uint) []models.DetectedRisk {
 		ClinicName    string
 		DoctorName    string
 		PatientIIN    string
+		PatientName    string
 		ServiceCode   string
 		ServiceName   string
 		RiskDate      time.Time
@@ -534,6 +541,7 @@ func collectA4(jobID uint) []models.DetectedRisk {
             MIN(sr.clinic_name) AS clinic_name,
             sr.doctor_name,
             sr.patient_iin,
+            sr.patient_name,
             sr.service_code,
             MIN(sr.service_name) AS service_name,
             sr.service_date::date AS risk_date,
@@ -542,10 +550,12 @@ func collectA4(jobID uint) []models.DetectedRisk {
             COALESCE(SUM(sr.amount), 0) AS total_amount
         FROM service_records AS sr
         JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
-        WHERE BTRIM(COALESCE(sr.patient_iin, '')) <> ''
+        WHERE BTRIM(COALESCE(sr.patient_iin,
+            sr.patient_name, '')) <> ''
           AND BTRIM(COALESCE(sr.doctor_name, '')) <> ''
           AND sc.max_per_day > 0
-        GROUP BY sr.patient_iin, sr.doctor_name, sr.service_code, sr.service_date::date
+        GROUP BY sr.patient_iin,
+            sr.patient_name, sr.doctor_name, sr.service_code, sr.service_date::date
         HAVING COUNT(*) > MAX(sc.max_per_day)
     `).Scan(&rows).Error
 
@@ -557,6 +567,7 @@ func collectA4(jobID uint) []models.DetectedRisk {
 	for _, r := range rows {
 		details := map[string]interface{}{
 			"patient_iin":     r.PatientIIN,
+			"patient_name":      r.PatientName,
 			"doctor_name":     r.DoctorName,
 			"service_code":    r.ServiceCode,
 			"service_name":    r.ServiceName,
@@ -588,6 +599,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 		ClinicName     string
 		DoctorName     string
 		PatientIIN     string
+		PatientName    string
 		ServiceCode    string
 		ServiceName    string
 		Year           int
@@ -602,6 +614,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
             MIN(sr.clinic_name) AS clinic_name,
             sr.doctor_name,
             sr.patient_iin,
+            sr.patient_name,
             sr.service_code,
             MIN(sr.service_name) AS service_name,
             EXTRACT(YEAR FROM sr.service_date)::int AS year,
@@ -612,7 +625,8 @@ func collectA7(jobID uint) []models.DetectedRisk {
         JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
         WHERE sr.service_date IS NOT NULL
           AND sc.max_per_year > 0
-        GROUP BY sr.doctor_name, sr.patient_iin, sr.service_code, EXTRACT(YEAR FROM sr.service_date)
+        GROUP BY sr.doctor_name, sr.patient_iin, sr.patient_name,
+            sr.patient_name, sr.service_code, EXTRACT(YEAR FROM sr.service_date)
         HAVING SUM(GREATEST(sr.quantity, 1)) > MAX(sc.max_per_year)
     `).Scan(&rows).Error
 
@@ -628,6 +642,7 @@ func collectA7(jobID uint) []models.DetectedRisk {
 			"clinic_name":      r.ClinicName,
 			"doctor_name":      r.DoctorName,
 			"patient_iin":      r.PatientIIN,
+			"patient_name":      r.PatientName,
 			"service_code":     r.ServiceCode,
 			"service_name":     r.ServiceName,
 			"year":             r.Year,
@@ -658,6 +673,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
 		ClinicName    string
 		DoctorName    string
 		PatientIIN    string
+		PatientName    string
 		ServiceCode   string
 		ServiceName   string
 		ServiceDate   time.Time
@@ -674,6 +690,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
             sr.clinic_name,
             sr.doctor_name,
             sr.patient_iin,
+            sr.patient_name,
             sr.service_code,
             sr.service_name,
             sr.service_date::date AS service_date,
@@ -698,6 +715,7 @@ func collectA8(jobID uint) []models.DetectedRisk {
 			"clinic_name":    r.ClinicName,
 			"doctor_name":    r.DoctorName,
 			"patient_iin":    r.PatientIIN,
+			"patient_name":      r.PatientName,
 			"service_code":   r.ServiceCode,
 			"service_name":   r.ServiceName,
 			"service_date":   r.ServiceDate.Format("2006-01-02"),

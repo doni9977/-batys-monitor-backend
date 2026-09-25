@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/xuri/excelize/v2"
@@ -48,7 +49,12 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 		for _, kw := range keywords {
 			kwLower := normalizeHeader(kw)
 			for idx, colName := range columnNames {
-				if strings.Contains(colName, kwLower) {
+				// Специальная проверка для коротких слов вроде "пол", чтобы не находить "дополнительная"
+				if kwLower == "пол" {
+					if colName == "пол" || strings.HasPrefix(colName, "пол ") || strings.HasSuffix(colName, " пол") {
+						return idx
+					}
+				} else if strings.Contains(colName, kwLower) {
 					return idx
 				}
 			}
@@ -62,7 +68,7 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	dateIdx := findColIndex("период услуги", "дата услуги", "период", "дата")
 	doctorIdx := findColIndex("врач", "специалист")
 	iinIdx := findColIndex("иин", "инн")
-	patientNameIdx := findColIndex("пациенты")
+	patientNameIdx := findColIndex("пациенты", "пациент", "фиофизлица", "фио")
 	genderIdx := findColIndex("пол")
 	dobIdx := findColIndex("рождения", "дата рожд")
 	codeIdx := findColIndex("код услуги", "код")
@@ -103,12 +109,21 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 			continue
 		}
 
+		patientIIN := getValByIndex(iinIdx)
+		patientName := normalizeName(getValByIndex(patientNameIdx))
+		patientGender := getValByIndex(genderIdx)
+
+		// Если колонки «Пол» нет в файле или значение пустое — определяем пол автоматически
+		if patientGender == "" || genderIdx == -1 {
+			patientGender = inferGender(patientIIN, patientName)
+		}
+
 		record := models.ServiceRecord{
 			ClinicName:     normalizeName(getValByIndex(clinicIdx)),
 			DoctorName:     doctorName,
-			PatientIIN:     getValByIndex(iinIdx),
-			PatientName:    normalizeName(getValByIndex(patientNameIdx)),
-			PatientGender:  getValByIndex(genderIdx),
+			PatientIIN:     patientIIN,
+			PatientName:    patientName,
+			PatientGender:  patientGender,
 			PatientDOB:     getValByIndex(dobIdx),
 			ServiceCode:    getValByIndex(codeIdx),
 			ServiceName:    getValByIndex(serviceNameIdx),
@@ -211,4 +226,82 @@ func parseServiceDate(value string, use1904Dates bool) time.Time {
 	}
 
 	return time.Time{}
+}
+
+// inferGender определяет пол пациента, когда колонка «Пол» отсутствует в файле.
+//
+// Стратегия 1 — ИИН (приоритетная, точность ~100%):
+//
+//	В казахстанском ИИН (12 цифр) 7-я цифра кодирует век рождения и пол:
+//	  нечётная (1, 3, 5) → мужчина
+//	  чётная   (2, 4, 6) → женщина
+//
+// Стратегия 2 — Лингвистический анализ ФИО (fallback, точность ~95%):
+//
+//	Анализируем окончания отчеств и фамилий:
+//	  женские: -овна, -евна, -қызы, -кызы, -гызы, -ова, -ева, -ина, -ская, -цкая
+//	  мужские: -ович, -евич, -ұлы, -улы, -ов, -ев, -ин, -ский, -цкий, -ий
+func inferGender(iin, fullName string) string {
+	// ── Стратегия 1: по ИИН ──────────────────────────────────────────
+	cleanIIN := strings.Map(func(r rune) rune {
+		if unicode.IsDigit(r) {
+			return r
+		}
+		return -1
+	}, iin)
+
+	if len(cleanIIN) == 12 {
+		seventh := cleanIIN[6] // 7-я цифра (0-indexed = 6)
+		switch seventh {
+		case '1', '3', '5':
+			return "Мужчина"
+		case '2', '4', '6':
+			return "Женщина"
+		}
+	}
+
+	// ── Стратегия 2: по ФИО ──────────────────────────────────────────
+	if fullName == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(strings.TrimSpace(fullName))
+	// Разбиваем на слова (обычно: фамилия имя отчество)
+	words := strings.Fields(lower)
+
+	// Женские суффиксы (проверяем каждое слово)
+	femaleSuffixes := []string{
+		"овна", "евна", "ёвна", // русские отчества
+		"қызы", "кызы", "гызы", "кизи", // казахские отчества
+		"ова", "ева", "ёва", // фамилии
+		"ина", "ына",
+		"ская", "цкая",
+		"ая",
+	}
+	// Мужские суффиксы
+	maleSuffixes := []string{
+		"ович", "евич", "ёвич", // русские отчества
+		"ұлы", "улы", "у|лы", "углы", // казахские отчества
+		"ов", "ев", "ёв", // фамилии
+		"ин", "ын",
+		"ский", "цкий",
+	}
+
+	// Проверяем каждое слово, начиная с последнего (отчество обычно в конце)
+	for i := len(words) - 1; i >= 0; i-- {
+		w := words[i]
+		// Сначала проверяем женские (длинные суффиксы важнее — «овна» приоритетнее «на»)
+		for _, s := range femaleSuffixes {
+			if strings.HasSuffix(w, s) && len([]rune(w)) > len([]rune(s))+1 {
+				return "Женщина"
+			}
+		}
+		for _, s := range maleSuffixes {
+			if strings.HasSuffix(w, s) && len([]rune(w)) > len([]rune(s))+1 {
+				return "Мужчина"
+			}
+		}
+	}
+
+	return ""
 }

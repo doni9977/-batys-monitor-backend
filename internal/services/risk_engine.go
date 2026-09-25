@@ -351,6 +351,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
 		DoctorName    string
 		PatientIIN    string
 		PatientGender string
+		PatientAge    int
 		ServiceCode   string
 		ServiceName   string
 		ServiceDate   time.Time
@@ -359,23 +360,43 @@ func collectA2(jobID uint) []models.DetectedRisk {
 
 	rows := []row{}
 	err := database.DB.Raw(`
+        WITH parsed AS (
+            SELECT
+                sr.clinic_name,
+                sr.doctor_name,
+                sr.patient_iin,
+                sr.patient_gender,
+                sr.service_code,
+                sr.service_name,
+                sr.service_date,
+                sc.gender_restriction,
+                CASE
+                    WHEN BTRIM(sr.patient_dob) ~ '^\d{2}\.\d{2}\.\d{4}$'
+                        THEN TO_DATE(BTRIM(sr.patient_dob), 'DD.MM.YYYY')
+                    WHEN BTRIM(sr.patient_dob) ~ '^\d{4}-\d{2}-\d{2}$'
+                        THEN TO_DATE(BTRIM(sr.patient_dob), 'YYYY-MM-DD')
+                    ELSE NULL
+                END AS dob
+            FROM service_records AS sr
+            JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
+        )
         SELECT
-            sr.clinic_name,
-            sr.doctor_name,
-            sr.patient_iin,
-            sr.patient_gender,
-            sr.service_code,
-            sr.service_name,
-            sr.service_date::date AS service_date,
+            clinic_name,
+            doctor_name,
+            patient_iin,
+            patient_gender,
+            EXTRACT(YEAR FROM AGE(service_date, dob))::int AS patient_age,
+            service_code,
+            service_name,
+            service_date::date AS service_date,
             'Нарушение пола' AS reason
-        FROM service_records AS sr
-        JOIN service_classifiers AS sc ON BTRIM(UPPER(sc.code)) = BTRIM(UPPER(sr.service_code))
-        WHERE sr.service_date IS NOT NULL
-          AND BTRIM(sr.patient_gender) <> ''
+        FROM parsed
+        WHERE service_date IS NOT NULL
+          AND BTRIM(patient_gender) <> ''
           AND (
-            (LOWER(BTRIM(sc.gender_restriction)) = 'женщина' AND LOWER(BTRIM(sr.patient_gender)) <> 'женщина')
+            (LOWER(BTRIM(gender_restriction)) = 'женщина' AND LOWER(BTRIM(patient_gender)) <> 'женщина')
             OR
-            (LOWER(BTRIM(sc.gender_restriction)) = 'мужчина' AND LOWER(BTRIM(sr.patient_gender)) <> 'мужчина')
+            (LOWER(BTRIM(gender_restriction)) = 'мужчина' AND LOWER(BTRIM(patient_gender)) <> 'мужчина')
           )
     `).Scan(&rows).Error
 
@@ -390,6 +411,7 @@ func collectA2(jobID uint) []models.DetectedRisk {
 			"doctor_name":    r.DoctorName,
 			"patient_iin":    r.PatientIIN,
 			"patient_gender": r.PatientGender,
+			"patient_age":    r.PatientAge,
 			"service_code":   r.ServiceCode,
 			"service_name":   r.ServiceName,
 			"service_date":   r.ServiceDate.Format("2006-01-02"),

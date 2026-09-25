@@ -68,7 +68,16 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	dateIdx := findColIndex("период услуги", "дата услуги", "период", "дата")
 	doctorIdx := findColIndex("врач", "специалист")
 	iinIdx := findColIndex("иин", "инн")
-	patientNameIdx := findColIndex("пациенты", "пациент", "фиофизлица", "фио")
+		patientNameIdx := findColIndex("фиофизлица", "фио", "пациенты")
+	// Если не нашли, ищем "пациент", но избегаем "id"
+	if patientNameIdx == -1 {
+		for idx, colName := range columnNames {
+			if strings.Contains(colName, "пациент") && !strings.Contains(colName, "id") {
+				patientNameIdx = idx
+				break
+			}
+		}
+	}
 	genderIdx := findColIndex("пол")
 	dobIdx := findColIndex("рождения", "дата рожд")
 	codeIdx := findColIndex("код услуги", "код")

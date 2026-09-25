@@ -70,7 +70,7 @@ func ParseExcel(filePath string) ([]models.ServiceRecord, error) {
 	qtyIdx := findColIndex("количеств")
 	amountIdx := findColIndex("сумм")
 	diagIdx := findColIndex("мкб", "диагноз")
-	clinicIdx := findColIndex("поставщик", "организация", "клиника", "клиник")
+	clinicIdx := findColIndex("клиника", "клиник", "поставщик", "организация")
 
 	var records []models.ServiceRecord
 

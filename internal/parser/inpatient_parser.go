@@ -63,6 +63,25 @@ func ParseInpatientExcel(filePath string) ([]models.InpatientRecord, error) {
 		return nil, fmt.Errorf("не найдена строка заголовков (ожидались 'Ф.И.О.' и 'Дата поступления')")
 	}
 
+	// В отчётах название организации указано в строке фильтров над таблицей.
+	// Оно надёжнее колонки «Наименование стационара выписки», где может быть
+	// другое название/формат и из-за этого неверно ставится точка на карте.
+	hospitalName := ""
+	for i := 0; i < headerIdx; i++ {
+		for _, cell := range rows[i] {
+			label, value, found := strings.Cut(cell, ":")
+			if found && strings.Contains(normalizeHeader(label), "медицинская организация") {
+				hospitalName = organizationDisplayName(value)
+				if hospitalName != "" {
+					break
+				}
+			}
+		}
+		if hospitalName != "" {
+			break
+		}
+	}
+
 	// --- Шаг 2: нормализуем заголовки и ищем индексы нужных колонок ---
 	header := rows[headerIdx]
 	columnNames := make([]string, len(header))
@@ -139,12 +158,15 @@ func ParseInpatientExcel(filePath string) ([]models.InpatientRecord, error) {
 			IsPlanned:     toIntFromFloat(getVal(plannedIdx)),
 			IsEmergency:   toIntFromFloat(getVal(emergencyIdx)),
 			Amount:        toFloat(getVal(amountIdx)),
-			HospitalName:  normalizeName(getVal(hospitalIdx)),
+			HospitalName:  hospitalName,
 			Department:    normalizeName(getVal(deptIdx)),
 			DoctorName:    normalizeName(getVal(doctorIdx)),
 			CareType:      getVal(careTypeIdx),
 			CaseID:        getVal(caseIdx),
 			CreatedAt:     time.Now(),
+		}
+		if rec.HospitalName == "" {
+			rec.HospitalName = organizationDisplayName(getVal(hospitalIdx))
 		}
 
 		// Минимальная валидация: без даты поступления запись бесполезна для алгоритмов.
@@ -158,6 +180,35 @@ func ParseInpatientExcel(filePath string) ([]models.InpatientRecord, error) {
 	log.Printf("[Inpatient Parser] Распарсено %d записей из %s (лист '%s')",
 		len(records), filePath, sheetName)
 	return records, nil
+}
+
+// organizationDisplayName removes the legal form from a company name when
+// the report includes its commonly used name in quotation marks.
+func organizationDisplayName(value string) string {
+	value = normalizeName(value)
+	runes := []rune(value)
+	start := -1
+	for i, r := range runes {
+		if strings.ContainsRune("\"«“„", r) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return value
+	}
+	closing := rune('"')
+	if runes[start] == '«' || runes[start] == '„' {
+		closing = '»'
+	} else if runes[start] == '“' {
+		closing = '”'
+	}
+	for i := start + 1; i < len(runes); i++ {
+		if runes[i] == closing {
+			return normalizeName(string(runes[start+1 : i]))
+		}
+	}
+	return value
 }
 
 // toIntFromFloat парсит значения вида "3.0", "1.0" в int.

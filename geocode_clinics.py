@@ -5,6 +5,20 @@ import json, urllib.request, urllib.parse, time, os, subprocess
 API_KEY = "fc827f62-089b-4be6-879b-bc09ec558253"
 URALSK_CENTER = (51.2333, 51.3667)
 
+def normalize_clinic_name(name):
+    """Normalize legal forms and generic clinic words for alias matching."""
+    name = name.lower()
+    for phrase in (
+        "товарищество с ограниченной ответственностью",
+        "акционерное общество",
+        "государственное коммунальное предприятие",
+        "тоо", "ао", "гкп", "медицинский центр", "медицинская организация",
+        "медцентр", "клиника", "поликлиника", "больница", "medical center",
+        "clinic", "hospital",
+    ):
+        name = name.replace(phrase, "")
+    return "".join(char for char in name if char.isalnum())
+
 def geocode_2gis(query):
     """Ищет организацию по названию в Уральске через 2GIS."""
     search_query = query.replace('ГКП на праве хозяйственного ведения', '').replace('управления здравоохранения акимата Западно-Казахстанской области', '').strip()
@@ -53,19 +67,35 @@ def main():
 
     updated = False
     for clinic in clinics:
-        if clinic not in coords or coords[clinic].get("lat") == URALSK_CENTER[0]:
-            print(f"Поиск: {clinic}...")
-            res = geocode_2gis(clinic)
-            if res:
-                lat, lng, address = res
-                coords[clinic] = {"lat": lat, "lng": lng, "address": address}
-                print(f"  ✅ {address} ({lat}, {lng})")
-                updated = True
-            else:
-                print("  ❌ Не найдено в 2GIS.")
-                coords[clinic] = {"lat": URALSK_CENTER[0], "lng": URALSK_CENTER[1], "address": f"г. Уральск ({clinic})"}
-                updated = True
-            time.sleep(0.3)
+        current = coords.get(clinic, {})
+        if current.get("address") and not current["address"].startswith("г. Уральск ("):
+            continue
+
+        normalized = normalize_clinic_name(clinic)
+        alias = next(
+            (value for name, value in coords.items()
+             if normalize_clinic_name(name) == normalized
+             and value.get("address")
+             and not value["address"].startswith("г. Уральск (")),
+            None,
+        )
+        if alias:
+            coords[clinic] = alias.copy()
+            print(f"Совпадение названия: {clinic} → {alias['address']}")
+            updated = True
+            continue
+
+        print(f"Поиск в 2GIS: {clinic}...")
+        res = geocode_2gis(clinic)
+        if res:
+            lat, lng, address = res
+            coords[clinic] = {"lat": lat, "lng": lng, "address": address}
+            print(f"  ✅ {address} ({lat}, {lng})")
+            updated = True
+        else:
+            # Не сохраняем выдуманную точку: неизвестный адрес останется без маркера.
+            print("  ❌ 2GIS не подтвердил адрес; случайная точка не записана.")
+        time.sleep(0.3)
 
     if updated or not os.path.exists(coords_file):
         os.makedirs(os.path.dirname(coords_file), exist_ok=True)

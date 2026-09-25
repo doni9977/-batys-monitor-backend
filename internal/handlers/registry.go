@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/danialmarat/batys-monitor-backend/internal/database"
 	"github.com/danialmarat/batys-monitor-backend/internal/models"
 	"github.com/gofiber/fiber/v2"
@@ -32,7 +34,6 @@ func GetRegistry(c *fiber.Ctx) error {
 			"subjects": []RegistryRow{},
 		})
 	}
-
 	var rows []RegistryRow
 	err = database.DB.Model(&models.DetectedRisk{}).
 		Select("clinic_name, SUM(amount) as total_amount, COUNT(id) as total_risks, MAX(details->>'bin') as bin, MAX(details->>'legal_address') as district").
@@ -46,9 +47,40 @@ func GetRegistry(c *fiber.Ctx) error {
 			"error": "Ошибка при формировании реестра: " + err.Error(),
 		})
 	}
+	for i := range rows {
+		rows[i].ClinicName = organizationDisplayName(rows[i].ClinicName)
+	}
 
 	return c.JSON(fiber.Map{
 		"job_id":   latestJob.ID,
 		"subjects": rows,
 	})
+}
+
+func organizationDisplayName(value string) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	start := -1
+	for i, r := range runes {
+		if strings.ContainsRune("\"«“„", r) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return value
+	}
+	closing := rune('"')
+	switch runes[start] {
+	case '«', '„':
+		closing = '»'
+	case '“':
+		closing = '”'
+	}
+	for i := start + 1; i < len(runes); i++ {
+		if runes[i] == closing {
+			return strings.TrimSpace(string(runes[start+1 : i]))
+		}
+	}
+	return value
 }
